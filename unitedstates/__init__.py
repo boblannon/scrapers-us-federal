@@ -1,6 +1,6 @@
 from pupa.scrape import Jurisdiction, Organization
 from .legislative import UnitedStatesLegislativeScraper
-
+from .disclosures import UnitedStatesLobbyingDisclosureScraper
 
 class UnitedStates(Jurisdiction):
     classification = 'government'
@@ -17,6 +17,7 @@ class UnitedStates(Jurisdiction):
 
     scrapers = {
         "congress": UnitedStatesLegislativeScraper,
+        "lobbying_disclosures": UnitedStatesLobbyingDisclosureScraper,
         # Executive Scraper here
     }
 
