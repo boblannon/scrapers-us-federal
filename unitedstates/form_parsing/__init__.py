@@ -145,6 +145,7 @@ class SchemaParser(Parser):
             e = self.extract_location(container, schema_node['path'], prop_name,
                                       missing_okay=schema_node.get('missing',False))
             if e in ([],''):
+                # TODO: should this return null if blank=True?
                 return e
             else:
                 return _parse_fct(e)

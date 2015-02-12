@@ -1,6 +1,7 @@
 from pupa.scrape import Jurisdiction, Organization
 from .legislative import UnitedStatesLegislativeScraper
-from .disclosures import UnitedStatesLobbyingDisclosureScraper
+from .disclosures import UnitedStatesLobbyingRegistrationDisclosureScraper
+
 
 class UnitedStates(Jurisdiction):
     classification = 'government'
@@ -10,14 +11,15 @@ class UnitedStates(Jurisdiction):
     url = 'http://usa.gov/'
 
     parties = [
-        {"name": "Republican",},
-        {"name": "Democratic",},
-        {"name": "Independent",},
+        {"name": "Republican", },
+        {"name": "Democratic", },
+        {"name": "Independent", },
     ]
 
     scrapers = {
         "congress": UnitedStatesLegislativeScraper,
-        "lobbying_disclosures": UnitedStatesLobbyingDisclosureScraper,
+        "lobbying_registrations":
+            UnitedStatesLobbyingRegistrationDisclosureScraper,
         # Executive Scraper here
     }
 
