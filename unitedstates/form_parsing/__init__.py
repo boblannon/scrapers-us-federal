@@ -1,13 +1,54 @@
+import os
 import logging
+import json
+import datetime
+
+from copy import deepcopy
+from collections import OrderedDict
+from collections import defaultdict
 
 from lxml import etree
 
-from pupa import utils
+import pupa.utils
+
+from validictory import ValidationError
+
+from .parse_schema.sopr_html import ld1_schema
+
+
+class Form(object):
+
+    _type = 'disclosure_form'
+    _form_jurisdiction = None
+    _form_type = None
+    _schema = {'title': 'Basic Form Model', 'description': ''}
+
+    def __init__(self, *args, **kwargs):
+        super().__init__()
+        self._record = {'_meta': {}}
+        self._name = self._schema['title']
+        self._description = self._schema['description']
+
+    def as_dict(self):
+        return self._record
+
+    def pre_save(self):
+        pass
+
+    def validate(self):
+        validator = pupa.utils.DatetimeValidator(required_by_default=False)
+
+        try:
+            validator.validate(self.as_dict(), self.schema)
+        except ValidationError as ve:
+            raise ValidationError('validation of {} {} failed: {}'.format(
+                self.__class__.__name__, self._form_jurisdiction, ve)
+            )
+
 
 class Parser(object):
 
-    def __init__(self, jurisdiction, datadir, *, strict_validation=True):
-        super(self, Parser).__init__(self)
+    def __init__(self, jurisdiction, datadir, strict_validation=True):
         self.jurisdiction = jurisdiction
         self.datadir = datadir
 
@@ -18,7 +59,7 @@ class Parser(object):
         self.warning = self.logger.warning
         self.error = self.logger.error
         self.critical = self.logger.critical
-    
+
     def save_object(self, obj):
         """
             Save object to disk as JSON.
@@ -28,16 +69,17 @@ class Parser(object):
 
         obj.pre_save(self.jurisdiction.jurisdiction_id)
 
-        filename = '{0}_{1}.json'.format(obj._type, obj._id).replace('/', '-')
+        filename = '{1}.json'.format(obj._id).replace('/', '-')
 
         self.info('save %s %s as %s', obj._type, obj, filename)
         self.debug(json.dumps(OrderedDict(sorted(obj.as_dict().items())),
-                              cls=utils.JSONEncoderPlus, indent=4, separators=(',', ': ')))
+                              cls=pupa.utils.JSONEncoderPlus, indent=4,
+                              separators=(',', ': ')))
 
         self.output_names[obj._type].add(filename)
 
         with open(os.path.join(self.datadir, filename), 'w') as f:
-            json.dump(obj.as_dict(), f, cls=utils.JSONEncoderPlus)
+            json.dump(obj.as_dict(), f, cls=pupa.utils.JSONEncoderPlus)
 
         # validate after writing, allows for inspection on failure
         try:
@@ -47,98 +89,185 @@ class Parser(object):
             if self.strict_validation:
                 raise ve
 
-        # after saving and validating, save subordinate objects
-        for obj in obj._related:
-            self.save_object(obj)
-    
     def do_parse(self, **kwargs):
+        if not kwargs.get('root', False):
+            raise Exception('No document root included')
+        if not kwargs.get('document_id', False):
+            raise Exception('No document id included')
+
         record = {'objects': defaultdict(int)}
         self.output_names = defaultdict(set)
         record['start'] = datetime.datetime.utcnow()
-        for obj in self.scrape(**kwargs) or []:
+        for obj in self.parse(**kwargs) or []:
+            self.debug('{o}'.format(o=obj))
             if hasattr(obj, '__iter__'):
                 for iterobj in obj:
                     self.save_object(iterobj)
             else:
                 self.save_object(obj)
+            yield obj
         record['end'] = datetime.datetime.utcnow()
-        record['skipped'] = getattr(self, 'skipped', 0)
         if not self.output_names:
-            raise ScrapeError('no objects returned from scrape')
+            self.error('no objects returned from parse')
         for _type, nameset in self.output_names.items():
             record['objects'][_type] += len(nameset)
 
-        return record
+        # return record
 
     def parse(self, **kwargs):
-        raise NotImplementedError(self.__class__.__name__ + ' must provide a scrape() method')
+        raise NotImplementedError(self.__class__.__name__ +
+                                  ' must provide a parse() method')
+
 
 class SchemaParser(Parser):
 
-    def __init__(self, parser_schema):
-        super(self, SchemaParser).__init__(self)
-        self._schema = parser_schema
+    def __init__(self, jurisdiction, data_dir, strict_validation=True):
+        super().__init__(jurisdiction, data_dir, strict_validation)
+        self._schema = self.form_model._schema
 
-    def parse_schema_node(self, schema_node, container):
-        #initial container is just the root node of the lxml etree  
+    def extract_location(self, container, path, prop, expect_array=False, missing_okay=False):
+        raise NotImplementedError(self.__class__.__name__ +
+                                  ' must provide a method for extracting' +
+                                  ' from path location')
+
+    def parse_schema_node(self, schema_node, container, prop_name):
+        # initial container is just the root node of the lxml etree
         if schema_node['type'] == 'array':
-            return self.parse_array(schema_node, container)
-        if schema_node['type'] == 'object':
+            return self.parse_array(deepcopy(schema_node), container, prop_name)
+
+        elif schema_node['type'] == 'object':
             result = {}
-            for prop, node in schema_node['properties']:
-                result['prop'] = self.parse_schema_node(node, container)
+            for subprop, subnode in schema_node['properties'].items():
+                result[subprop] = self.parse_schema_node(deepcopy(subnode), container, subprop)
             return result
         else:
             _parse_fct = schema_node['parser']
-            _elements = container.xpath(schema_node['path'])
-            for e in _elements:
+            e = self.extract_location(container, schema_node['path'], prop_name,
+                                      missing_okay=schema_node.get('missing',False))
+            if e in ([],''):
+                return e
+            else:
                 return _parse_fct(e)
 
-    def parse_array(self, schema_node, container):
+    def parse_array(self, schema_node, container, prop):
         result_array = []
 
-        array_container = container.xpath(schema_node['path'])
+        array_container = self.extract_location(container, schema_node['path'],
+                                                prop, missing_okay=schema_node.get('missing',False))
         items_schema = schema_node['items']
         even_odd = items_schema.get('even_odd', False)
 
-        items = array_container.xpath(items_schema['path'])
+        items = self.extract_location(array_container, items_schema['path'], prop, expect_array=True, missing_okay=items_schema.get('missing', False))
         if even_odd:
             evens = items[::2]
             odds = items[1::2]
-            even_props = filter(lambda x: x['even_odd'] == 'even', items['properties'])
-            odd_props = filter(lambda x: x['even_odd'] == 'odd', items['properties'])
-            for even, odd in zip(evens,odds):
+            all_props = items_schema['properties']
+            even_props = filter(lambda x: all_props[x]['even_odd'] == 'even',
+                                all_props.keys())
+            odd_props = filter(lambda x: all_props[x]['even_odd'] == 'odd',
+                               all_props.keys())
+            for even, odd in zip(evens, odds):
                 result = {}
                 for prop_name, prop_node in even_props:
-                    result.update({prop_name: parse_schema_node(prop_node, even)})
+                    result.update({prop_name: self.parse_schema_node(
+                        prop_node, even, prop_name)})
                 for prop_name, prop_node in odd_props:
-                    result.update({prop_name: parse_schema_node(prop_node, odd)})
+                    result.update({prop_name: self.parse_schema_node(
+                        prop_node, odd, prop_name)})
                 result_array.append(result)
         else:
-            for item in array_container.xpath(schema_node['items']['path']):
-                result = parse_schema_node(schema_node['items']['properties'], item)
+            for item in items:
+                result = self.parse_schema_node(items_schema, item, prop)
                 result_array.append(result)
         return result_array
 
-    def parse(self, root):
+    def parse(self, root=None, document_id=None):
         if self._schema['type'] == 'object':
-            record = {}
-            for prop, schema_node in self._schema.iteritems():
+            form = self.form_model(document_id)
+            for prop, schema_node in self._schema['properties'].items():
                 if prop == "_meta":
                     continue
                 else:
-                    record[prop] = self.parse_schema_node(schema_node, root)
+                    form._record[prop] = self.parse_schema_node(schema_node,
+                                                                root,
+                                                                prop)
+            return form
+        else:
+            raise NotImplementedError('Sorry, only implemented for schemas'
+                                      'where top level is object')
 
 
 class HTMLSchemaParser(SchemaParser):
 
-    def parse(self, html_string):
+    def extract_location(self, container, path, prop, expect_array=False, missing_okay=False):
+        found = container.xpath(path)
+        if not found:
+            if missing_okay:
+                if expect_array:
+                    return []
+                else:
+                    return ''
+            else:
+                container_loc = container.getroottree().getpath(container)
+                self.error("\n    ".join(["no match for property {n}",
+                                          "container: {c}",
+                                          "path: {p}\n"]).format(n=prop,
+                                                                 c=container_loc,
+                                                                 p=path))
+                raise Exception
+        else:
+            self.debug("\n    ".join(["match found for property {n}",
+                                      "container: {c}",
+                                      "path: {p}\n",
+                                      "found: {f}"]).format(n=prop,
+                                                             c=container.getroottree().getpath(container),
+                                                             p=path,
+                                                             f=found))
+            if expect_array:
+                return found
+            else:
+                if len(found) > 1:
+                    self.warning("\n    ".join(["more than one result for {n}",
+                                              "container: {c}",
+                                              "path: {p}\n"]).format(n=prop,
+                                                                     c=container.getroottree().getpath(container),
+                                                                     p=path))
+                    return found[0]
+                else:
+                    return found[0]
+
+    def parse(self, **kwargs):
         from lxml.html import HTMLParser
         html_parser = HTMLParser()
 
-        etree_root = etree.fromstring(html_string, parser=html_parser)
+        etree_root = etree.fromstring(kwargs['root'], parser=html_parser)
 
-        super(self, HTMLSchemaParser).parse(etree_root)
+        return super().parse(root=etree_root, document_id=kwargs['document_id'])
 
 
+class LobbyingRegistrationForm(Form):
 
+    _form_jurisdiction = 'unitedstates'
+    _form_type = 'LD1'
+    _schema = ld1_schema
+
+    def __init__(self, document_id):
+        super().__init__()
+        self._id = document_id
+
+    @property
+    def _id(self):
+        return self._record['_meta']['document_id']
+
+    @_id.setter
+    def _id(self, document_id):
+        if not self._record['_meta']:
+            self._record['_meta'] = {}
+        self._record['_meta']['document_id'] = document_id
+
+    def __str__(self):
+        return self._id
+
+
+class UnitedStatesLobbyingRegistrationParser(HTMLSchemaParser):
+    form_model = LobbyingRegistrationForm

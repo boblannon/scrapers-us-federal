@@ -1,4 +1,5 @@
 from datetime import datetime
+import locale
 
 REPLACE_MAP = {u'&#160;': u'',
                u'\xa0':  u'',
@@ -47,7 +48,7 @@ def checkbox_boolean(e):
 def clean_text(e):
     s = e.text or ''
     s = s.strip()
-    for p, r in REPLACE_MAP.iteritems():
+    for p, r in REPLACE_MAP.items():
         s = s.replace(p, r)
     return s
 
@@ -153,5 +154,3 @@ def parse_even_odd(array, children):
             _child_node = odd.xpath(_path)[0]
             record[_field] = _parser(_child_node)
         yield record
-
-

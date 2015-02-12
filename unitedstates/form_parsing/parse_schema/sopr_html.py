@@ -1,11 +1,14 @@
-from ref import sopr
+from unitedstates.ref import sopr_html
 
-from .utils.data_munge import clean_text, checkbox_boolean, parse_datetime 
+from ..utils.data_munge import clean_text, checkbox_boolean, parse_datetime
 
 
-sopr_general_issue_codes = sopr.general_issue_codes.keys()
+sopr_general_issue_codes = [i['issue_code'] for i in
+                            sopr_html.GENERAL_ISSUE_CODES]
 
 ld1_schema = {
+    "title": "Lobbying Registration",
+    "description": "Lobbying Disclosure Act of 1995 (Section 4)",
     "type": "object",
     "properties": {
         "_meta": {
@@ -20,7 +23,7 @@ ld1_schema = {
         "affiliated_organizations_url": {
             "type": ["null", "string"],
             "format": "url_http",
-            'path': '/html/body/table[15]/tbody/tr/td[2]/div',
+            'path': '/html/body/table[15]/tbody/td[2]/div',
             'parser': clean_text
         },
         "signature": {
@@ -67,7 +70,7 @@ ld1_schema = {
             }
         },
         "registrant": {
-            "type": "object"
+            "type": "object",
             "properties": {
                 "organization_or_lobbying_firm": {
                     "type": "boolean",
@@ -82,22 +85,26 @@ ld1_schema = {
                 "registrant_org_name": {
                     "type": "null",
                     'path': '/html/body/table[3]/tbody/tr/td[contains(.,"Organization")]/following-sibling::td[1]/div',
-                    'parser': clean_text
+                    'parser': clean_text,
+                    'missing': True
                 },
                 "registrant_individual_prefix": {
                     "type": "string",
                     'path': '/html/body/table[3]/tbody/tr/td[contains(.,"Prefix")]/following-sibling::td[1]/div',
-                    'parser': clean_text
+                    'parser': clean_text,
+                    'missing': True
                 },
                 "registrant_individual_firstname": {
                     "type": "string",
                     'path': '/html/body/table[3]/tbody/tr/td[5]/div',
-                    'parser': clean_text
+                    'parser': clean_text,
+                    'missing': True
                 },
                 "registrant_individual_lastname": {
                     "type": "string",
                     'path': '/html/body/table[3]/tbody/tr/td[7]/div',
-                    'parser': clean_text
+                    'parser': clean_text,
+                    'missing': True
                 },
                 "registrant_address_one": {
                     "type": "string",
@@ -198,7 +205,7 @@ ld1_schema = {
         },
         "client": {
             "type": "object",
-            "properties" {
+            "properties": {
                 "client_self": {
                     "type": "boolean",
                     'path': '/html/body/p[4]/input',
@@ -282,25 +289,26 @@ ld1_schema = {
             'path': '/html/body/table[13]/tbody',
             "items": {
                 "type": "object",
-                "path": "tr",
+                "path": "tr//td/div",
                 'even_odd': False,
                 "properties": {
                     "general_issue_area": {
                         "type": "string",
                         "enum": sopr_general_issue_codes,
-                        'path': 'td/div',
+                        'path': '.',
                         'parser': clean_text
                     }
                 }
             }
         },
         "affiliated_organizations": {
-            "type": "array"
+            "type": "array",
             'path': '/html/body/table[16]/tbody',
             "items": {
                 "type": "object",
                 'even_odd': True,
-                'path': 'tr[position() > 3]'
+                'path': 'tr[position() > 3]',
+                'missing': True,
                 "properties": {
                     "affiliated_organization_name": {
                         "type": "string",
@@ -374,10 +382,13 @@ ld1_schema = {
         },
         "foreign_entities": {
             "type": "array",
-            'path': '/html/body/table[19]/tbody/tr',
-            'parser': parse_even_odd,
+            'even_odd': True,
+            'path': '/html/body/table[19]/tbody',
+            'missing': True,
             "items": {
                 "type": "object",
+                "path": "tr",
+                'missing': True,
                 "properties": {
                     "foreign_entity_name": {
                         "type": "string",
@@ -443,11 +454,11 @@ ld1_schema = {
             }
         },
         "lobbyists": {
-            "type": "array"
-            'path': '/html/body/table[12]/tbody/tr[position() > 2]',
-            'parser': parse_array,
+            "type": "array",
+            'path': '/html/body/table[12]/tbody',
             "items": {
                 "type": "object",
+                "path": "tr[position() > 2]",
                 "properties": {
                     "lobbyist_suffix": {
                         "type": "string",
