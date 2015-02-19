@@ -1,10 +1,19 @@
-from unitedstates.ref import sopr_html
+import copy
+
+from unitedstates.ref import sopr_lobbying_reference
+
+from pupa.scrape.schemas.common import fuzzy_datetime_blank
 
 from ..utils.data_munge import clean_text, checkbox_boolean, parse_datetime
 
 
 sopr_general_issue_codes = [i['issue_code'] for i in
-                            sopr_html.GENERAL_ISSUE_CODES]
+                            sopr_lobbying_reference.GENERAL_ISSUE_CODES]
+
+def pupa_datetime(parse_properties):
+    pd = copy.deepcopy(fuzzy_datetime_blank)
+    pd.update(parse_properties)
+    return pd
 
 ld1_schema = {
     "title": "Lobbying Registration",
@@ -23,6 +32,8 @@ ld1_schema = {
         "affiliated_organizations_url": {
             "type": ["null", "string"],
             "format": "url_http",
+            "missing": True,
+            "blank": True,
             'path': '/html/body/table[15]/tbody/td[2]/div',
             'parser': clean_text
         },
@@ -35,18 +46,14 @@ ld1_schema = {
         "datetimes": {
             "type": "object",
             "properties": {
-                "signature_date": {
-                    "type": "string",
-                    "format": "date-time",
+                "signature_date": pupa_datetime({
                     'path': '/html/body/table[20]/tbody/tr/td[4]/div',
                     'parser': parse_datetime
-                },
-                "effective_date": {
-                    "type": "string",
-                    "format": "date-time",
+                }),
+                "effective_date": pupa_datetime({
                     'path': '/html/body/table[2]/tbody/tr[1]/td[3]/div',
                     'parser': parse_datetime
-                }
+                })
             }
         },
         "registration_type": {
@@ -83,28 +90,28 @@ ld1_schema = {
                     'parser': checkbox_boolean
                 },
                 "registrant_org_name": {
-                    "type": "null",
+                    "type": ["null", "string"],
                     'path': '/html/body/table[3]/tbody/tr/td[contains(.,"Organization")]/following-sibling::td[1]/div',
                     'parser': clean_text,
-                    'missing': True
+                    'missing': True,
                 },
                 "registrant_individual_prefix": {
-                    "type": "string",
+                    "type": ["null", "string"],
                     'path': '/html/body/table[3]/tbody/tr/td[contains(.,"Prefix")]/following-sibling::td[1]/div',
                     'parser': clean_text,
-                    'missing': True
+                    'missing': True,
                 },
                 "registrant_individual_firstname": {
-                    "type": "string",
+                    "type": ["null", "string"],
                     'path': '/html/body/table[3]/tbody/tr/td[5]/div',
                     'parser': clean_text,
-                    'missing': True
+                    'missing': True,
                 },
                 "registrant_individual_lastname": {
-                    "type": "string",
+                    "type": ["null", "string"],
                     'path': '/html/body/table[3]/tbody/tr/td[7]/div',
                     'parser': clean_text,
-                    'missing': True
+                    'missing': True,
                 },
                 "registrant_address_one": {
                     "type": "string",
@@ -286,27 +293,28 @@ ld1_schema = {
         },
         "lobbying_issues": {
             "type": "array",
+            'even_odd': False,
             'path': '/html/body/table[13]/tbody',
             "items": {
                 "type": "object",
                 "path": "tr//td/div",
-                'even_odd': False,
                 "properties": {
                     "general_issue_area": {
-                        "type": "string",
+                        "type": ["string"],
                         "enum": sopr_general_issue_codes,
                         'path': '.',
-                        'parser': clean_text
+                        'parser': clean_text,
+                        'blank': True
                     }
                 }
             }
         },
         "affiliated_organizations": {
             "type": "array",
+            'even_odd': True,
             'path': '/html/body/table[16]/tbody',
             "items": {
                 "type": "object",
-                'even_odd': True,
                 'path': 'tr[position() > 3]',
                 'missing': True,
                 "properties": {
@@ -411,6 +419,7 @@ ld1_schema = {
                     "foreign_entity_state": {
                         "type": "string",
                         "even_odd": "odd",
+                        "blank": True,
                         'path': 'td[2]/table/tbody/tr/td[2]/div',
                         'parser': clean_text
                     },
@@ -423,29 +432,32 @@ ld1_schema = {
                     "foreign_entity_ppb_city": {
                         "type": "string",
                         "even_odd": "even",
+                        "blank": True,
                         'path': 'td[3]/table/tbody/tr/td[2]/div',
                         'parser': clean_text
                     },
                     "foreign_entity_ppb_state": {
                         "type": "string",
                         "even_odd": "odd",
+                        "blank": True,
                         'path': 'td[3]/table/tbody/tr/td[2]/div',
                         'parser': clean_text
                     },
                     "foreign_entity_ppb_country": {
                         "type": "string",
                         "even_odd": "odd",
+                        "blank": True,
                         'path': 'td[3]/table/tbody/tr/td[4]/div',
                         'parser': clean_text
                     },
                     "foreign_entity_amount": {
-                        "type": "number",
+                        "type": "string",
                         "even_odd": "odd",
                         'path': 'td[4]/div',
                         'parser': clean_text
                     },
                     "foreign_entity_ownership_percentage": {
-                        "type": "number",
+                        "type": "string",
                         "even_odd": "odd",
                         'path': 'td[5]/div',
                         'parser': clean_text

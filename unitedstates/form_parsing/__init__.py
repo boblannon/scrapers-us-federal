@@ -21,13 +21,13 @@ class Form(object):
     _type = 'disclosure_form'
     _form_jurisdiction = None
     _form_type = None
-    _schema = {'title': 'Basic Form Model', 'description': ''}
+    schema = {'title': 'Basic Form Model', 'description': ''}
 
     def __init__(self, *args, **kwargs):
         super().__init__()
         self._record = {'_meta': {}}
-        self._name = self._schema['title']
-        self._description = self._schema['description']
+        self._name = self.schema['title']
+        self._description = self.schema['description']
 
     def as_dict(self):
         return self._record
@@ -45,12 +45,16 @@ class Form(object):
                 self.__class__.__name__, self._form_jurisdiction, ve)
             )
 
+    def __getitem__(self, key):
+        return self.as_dict()[key]
+
 
 class Parser(object):
 
     def __init__(self, jurisdiction, datadir, strict_validation=True):
         self.jurisdiction = jurisdiction
         self.datadir = datadir
+        self.strict_validation = True
 
         # logging convenience methods
         self.logger = logging.getLogger("parser")
@@ -67,9 +71,9 @@ class Parser(object):
             Generally shouldn't be called directly.
         """
 
-        obj.pre_save(self.jurisdiction.jurisdiction_id)
+        obj.pre_save()
 
-        filename = '{1}.json'.format(obj._id).replace('/', '-')
+        filename = '{id}.json'.format(id=obj._id).replace('/', '-')
 
         self.info('save %s %s as %s', obj._type, obj, filename)
         self.debug(json.dumps(OrderedDict(sorted(obj.as_dict().items())),
@@ -123,9 +127,10 @@ class SchemaParser(Parser):
 
     def __init__(self, jurisdiction, data_dir, strict_validation=True):
         super().__init__(jurisdiction, data_dir, strict_validation)
-        self._schema = self.form_model._schema
+        self.schema = self.form_model.schema
 
-    def extract_location(self, container, path, prop, expect_array=False, missing_okay=False):
+    def extract_location(self, container, path, prop, expect_array=False,
+                         missing_okay=False):
         raise NotImplementedError(self.__class__.__name__ +
                                   ' must provide a method for extracting' +
                                   ' from path location')
@@ -133,40 +138,65 @@ class SchemaParser(Parser):
     def parse_schema_node(self, schema_node, container, prop_name):
         # initial container is just the root node of the lxml etree
         if schema_node['type'] == 'array':
-            return self.parse_array(deepcopy(schema_node), container, prop_name)
+            return self.parse_array(
+                deepcopy(schema_node),
+                container,
+                prop_name
+            )
 
         elif schema_node['type'] == 'object':
             result = {}
             for subprop, subnode in schema_node['properties'].items():
-                result[subprop] = self.parse_schema_node(deepcopy(subnode), container, subprop)
+                result[subprop] = self.parse_schema_node(
+                    deepcopy(subnode),
+                    container,
+                    subprop
+                )
             return result
         else:
             _parse_fct = schema_node['parser']
-            e = self.extract_location(container, schema_node['path'], prop_name,
-                                      missing_okay=schema_node.get('missing',False))
-            if e in ([],''):
-                # TODO: should this return null if blank=True?
-                return e
-            else:
+            e = self.extract_location(
+                container,
+                schema_node['path'],
+                prop_name,
+                missing_okay=schema_node.get('missing', False)
+            )
+
+            if e is not None:
+                if e in ([], ''):
+                    return _parse_fct(e)
                 return _parse_fct(e)
+            else:
+                # TODO: should this return null if blank=True?
+                return None
 
     def parse_array(self, schema_node, container, prop):
         result_array = []
 
-        array_container = self.extract_location(container, schema_node['path'],
-                                                prop, missing_okay=schema_node.get('missing',False))
-        items_schema = schema_node['items']
-        even_odd = items_schema.get('even_odd', False)
+        array_container = self.extract_location(
+            container,
+            schema_node['path'],
+            prop,
+            missing_okay=schema_node.get('missing', False)
+        )
 
-        items = self.extract_location(array_container, items_schema['path'], prop, expect_array=True, missing_okay=items_schema.get('missing', False))
+        items_schema = schema_node['items']
+        even_odd = schema_node.get('even_odd', False)
+
+        items = self.extract_location(
+            array_container,
+            items_schema['path'],
+            prop,
+            expect_array=True,
+            missing_okay=items_schema.get('missing', False)
+        )
+
         if even_odd:
             evens = items[::2]
             odds = items[1::2]
             all_props = items_schema['properties']
-            even_props = filter(lambda x: all_props[x]['even_odd'] == 'even',
-                                all_props.keys())
-            odd_props = filter(lambda x: all_props[x]['even_odd'] == 'odd',
-                               all_props.keys())
+            even_props = [(p,s) for p,s in all_props.items() if s['even_odd'] == 'even']
+            odd_props = [(p,s) for p,s in all_props.items() if s['even_odd'] == 'odd']
             for even, odd in zip(evens, odds):
                 result = {}
                 for prop_name, prop_node in even_props:
@@ -179,20 +209,21 @@ class SchemaParser(Parser):
         else:
             for item in items:
                 result = self.parse_schema_node(items_schema, item, prop)
-                result_array.append(result)
+                if result:
+                    result_array.append(result)
         return result_array
 
     def parse(self, root=None, document_id=None):
-        if self._schema['type'] == 'object':
+        if self.schema['type'] == 'object':
             form = self.form_model(document_id)
-            for prop, schema_node in self._schema['properties'].items():
+            for prop, schema_node in self.schema['properties'].items():
                 if prop == "_meta":
                     continue
                 else:
                     form._record[prop] = self.parse_schema_node(schema_node,
                                                                 root,
                                                                 prop)
-            return form
+            yield form
         else:
             raise NotImplementedError('Sorry, only implemented for schemas'
                                       'where top level is object')
@@ -200,39 +231,50 @@ class SchemaParser(Parser):
 
 class HTMLSchemaParser(SchemaParser):
 
-    def extract_location(self, container, path, prop, expect_array=False, missing_okay=False):
+    def extract_location(self, container, path, prop, expect_array=False,
+                         missing_okay=False):
         found = container.xpath(path)
         if not found:
             if missing_okay:
                 if expect_array:
                     return []
                 else:
-                    return ''
+                    return None
             else:
                 container_loc = container.getroottree().getpath(container)
-                self.error("\n    ".join(["no match for property {n}",
-                                          "container: {c}",
-                                          "path: {p}\n"]).format(n=prop,
-                                                                 c=container_loc,
-                                                                 p=path))
+                self.error("\n    ".join(
+                        ["no match for property {n}",
+                         "container: {c}",
+                         "path: {p}\n"]
+                    ).format(n=prop,
+                             c=container_loc,
+                             p=path)
+                )
                 raise Exception
         else:
-            self.debug("\n    ".join(["match found for property {n}",
-                                      "container: {c}",
-                                      "path: {p}\n",
-                                      "found: {f}"]).format(n=prop,
-                                                             c=container.getroottree().getpath(container),
-                                                             p=path,
-                                                             f=found))
+            self.debug("\n    ".join(
+                    ["match found for property {n}",
+                     "container: {c}",
+                     "path: {p}\n",
+                     "found: {f}"]
+                ).format(n=prop,
+                         c=container.getroottree().getpath(container),
+                         p=path,
+                         f=found)
+            )
+
             if expect_array:
                 return found
             else:
                 if len(found) > 1:
-                    self.warning("\n    ".join(["more than one result for {n}",
-                                              "container: {c}",
-                                              "path: {p}\n"]).format(n=prop,
-                                                                     c=container.getroottree().getpath(container),
-                                                                     p=path))
+                    self.warning("\n    ".join(
+                            ["more than one result for {n}",
+                             "container: {c}",
+                             "path: {p}\n"]
+                        ).format(n=prop,
+                                 c=container.getroottree().getpath(container),
+                                 p=path)
+                    )
                     return found[0]
                 else:
                     return found[0]
@@ -243,14 +285,15 @@ class HTMLSchemaParser(SchemaParser):
 
         etree_root = etree.fromstring(kwargs['root'], parser=html_parser)
 
-        return super().parse(root=etree_root, document_id=kwargs['document_id'])
+        return super().parse(root=etree_root,
+                             document_id=kwargs['document_id'])
 
 
 class LobbyingRegistrationForm(Form):
 
     _form_jurisdiction = 'unitedstates'
     _form_type = 'LD1'
-    _schema = ld1_schema
+    schema = ld1_schema
 
     def __init__(self, document_id):
         super().__init__()

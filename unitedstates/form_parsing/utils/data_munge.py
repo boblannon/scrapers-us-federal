@@ -15,7 +15,6 @@ DATE_FORMATS = ['%m/%d/%Y',
                 '%m-%d-%Y',
                 '%m-%d-%y']
 
-
 def get_key(my_dict, key):
     return reduce(dict.get, key.split("."), my_dict)
 
@@ -60,7 +59,7 @@ def parse_datetime(e):
         f = 0
         for f in DATE_FORMATS:
             try:
-                parsed = datetime.strptime(s, f).isoformat()
+                parsed = datetime.strptime(s, f).isoformat(sep=' ')
             except ValueError:
                 continue
             else:
