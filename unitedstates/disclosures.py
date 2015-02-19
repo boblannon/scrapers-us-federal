@@ -133,8 +133,10 @@ class UnitedStatesLobbyingDisclosureScraper(BaseDisclosureScraper):
         mkdir_p(self.parse_dir)
 
         self.build_parser()
+        doc_id = os.path.basename(os.path.splitext(filename)[0])
+
         forms = [f for f in self._parser.do_parse(root=response.content,
-                                                  document_id=filename)]
+                                                  document_id=doc_id)]
         if len(forms) > 1:
             raise Exception('more than one form in a filing?')
         elif len(forms) == 0:
