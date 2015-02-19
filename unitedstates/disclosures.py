@@ -10,7 +10,7 @@ from lxml import etree
 from pytz import timezone
 
 from pupa import settings
-from pupa.scrape import Scraper
+from pupa.scrape import BaseDisclosureScraper
 from pupa.scrape import Disclosure, Person, Organization, Event
 
 from unitedstates.ref import sopr_lobbying_reference
@@ -21,13 +21,8 @@ from .form_parsing import UnitedStatesLobbyingRegistrationParser
 
 NY_TZ = timezone('America/New_York')
 
-class SOPRDisclosure(Disclosure):
 
-    def __init__(self):
-        pass
-
-
-class UnitedStatesLobbyingDisclosureScraper(Scraper):
+class UnitedStatesLobbyingDisclosureScraper(BaseDisclosureScraper):
     base_url = 'http://soprweb.senate.gov/index.cfm'
     start_date = datetime.today()
     end_date = datetime.today()
