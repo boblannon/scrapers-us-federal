@@ -178,7 +178,7 @@ class UnitedStatesLobbyingRegistrationDisclosureScraper(
     def transform_parse(self, parsed_form, response):
 
         _source = {
-            "url": response.url,
+            "url": "?".join([response.request.url,response.request.body]),
             "note": "LDA Form LD-1"
         }
 
