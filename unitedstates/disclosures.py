@@ -756,7 +756,12 @@ class UnitedStatesLobbyingRegistrationDisclosureScraper(
             if li['general_issue_area'] != '':
                 _agenda.add_subject(li['general_issue_area'])
 
-        _disclosure.add_disclosed_event(_event)
+        _disclosure.add_disclosed_event(
+            name=_event.name,
+            type=_event._type,
+            classification=_event.classification,
+            id=_event._id
+        )
 
         # add registrant to disclosure's _related and related_entities fields
         _disclosure.add_registrant(name=_registrant.name,
