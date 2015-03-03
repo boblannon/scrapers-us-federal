@@ -8,39 +8,23 @@ import yaml
 class UnitedStatesLegislativeScraper(Scraper):
 
     def yamlize(self, url):
-        resp = self.urlopen(url)
-        return yaml.safe_load(resp)
+        f, resp = self.urlretrieve(url)
+        return yaml.safe_load(resp.content)
 
     def get_url(self, what):
         return ("https://raw.githubusercontent.com/"
-              + "unitedstates/congress-legislators/master/"
-              + what
-              + ".yaml")
-
-    def scrape_current_chambers(self):
-        CURRENT_LEGISLATORS = self.get_url("legislators-current")
-
-        house = Organization(
-            name="United States House of Representatives",
-            classification='legislature',
-        )
-        house.add_source(CURRENT_LEGISLATORS)
-        self.house = house
-        yield house
-
-        senate = Organization(
-            name="United States Senate",
-            classification='legislature',
-        )
-        senate.add_source(CURRENT_LEGISLATORS)
-        self.senate = senate
-        yield senate
+                + "unitedstates/congress-legislators/master/"
+                + what
+                + ".yaml")
 
     def scrape_current_legislators(self):
+        self.house = self.jurisdiction._house
+        self.senate = self.jurisdiction._senate
+        self.legislature = self.jurisdiction._legislature
+
         CURRENT_LEGISLATORS = self.get_url("legislators-current")
 
         people = self.yamlize(CURRENT_LEGISLATORS)
-        parties = set()
         posts = {}
         person_cache = defaultdict(lambda: defaultdict(lambda: None))
 
@@ -116,16 +100,16 @@ class UnitedStatesLegislativeScraper(Scraper):
                     division_id = ("ocd-division/country:us/state:{state}".format(
                         state=state.lower()))
 
-                    label = "Senitor for %s" % (state)
+                    label = "Senator for %s" % (state)
 
                     post = posts.get(division_id)
                     if post is None:
                         post = Post(organization_id={
-                                "rep": self.house,
-                                "sen": self.senate
-                            }[type_]._id,
-                            division_id=division_id,
-                            label=label, role=role)
+                                    "rep": self.house,
+                                    "sen": self.senate
+                                    }[type_]._id,
+                                    division_id=division_id,
+                                    label=label, role=role)
                         posts[division_id] = post
                         yield post
 
@@ -167,5 +151,4 @@ class UnitedStatesLegislativeScraper(Scraper):
                 yield who
 
     def scrape(self):
-        yield from self.scrape_current_chambers()
         yield from self.scrape_current_legislators()

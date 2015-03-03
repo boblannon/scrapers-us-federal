@@ -35,44 +35,6 @@ class UnitedStatesLobbyingDisclosureScraper(BaseDisclosureScraper):
         if end_date:
             self.end_date = datetime.strptime(end_date, '%Y-%m-%d')
 
-    def scrape_authority(self):
-
-        senate = Organization(
-            name="United States Senate",
-            classification='legislature',
-        )
-
-        yield senate
-
-        sopr = Organization(
-            name="Office of Public Record, US Senate",
-            classification="office",
-            parent_id=senate._id,
-        )
-
-        sopr.add_contact_detail(type="voice",
-                                value="202-224-0322")
-
-        sopr.add_source(url="http://www.senate.gov/pagelayout/legislative/"
-                            "one_item_and_teasers/opr.htm",
-                        note="Profile page")
-
-        sopr.add_source(url="http://www.senate.gov/pagelayout/legislative/"
-                            "g_three_sections_with_teasers/lobbyingdisc.htm"
-                            "#lobbyingdisc=lda",
-                        note="Disclosure Home")
-
-        sopr.add_link(url="http://soprweb.senate.gov/index.cfm"
-                          "?event=selectfields",
-                      note="Disclosure Search Portal")
-
-        sopr.add_link(url="http://soprweb.senate.gov/",
-                      note="Disclosure Electronic Filing System")
-
-        self.authority = sopr
-
-        yield sopr
-
     def search_filings(self):
         search_form = {'datePostedStart': datetime.strftime(self.start_date,
                                                             '%m/%d/%Y'),
@@ -145,16 +107,17 @@ class UnitedStatesLobbyingDisclosureScraper(BaseDisclosureScraper):
             return forms[0]
 
     def scrape(self, start_date=None, end_date=None):
+        self.authority = self.jurisdiction._sopr
 
         self._build_date_range(start_date, end_date)
-        for authority in self.scrape_authority():
-            yield authority
 
         for params in self.search_filings():
             filename, response = self.urlretrieve(
                 self.base_url,
-                filename=os.path.join(settings.CACHE_DIR,
-                                      '{fn}.html'.format(fn=params['filingID'])),
+                filename=os.path.join(
+                    settings.CACHE_DIR,
+                    '{fn}.html'.format(fn=params['filingID'])
+                ),
                 method='POST',
                 body=params
             )
