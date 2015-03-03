@@ -141,13 +141,14 @@ class UnitedStatesLobbyingRegistrationDisclosureScraper(
     def transform_parse(self, parsed_form, response):
 
         _source = {
-            "url": "?".join([response.request.url,response.request.body]),
+            "url": "?".join([response.request.url, response.request.body]),
             "note": "LDA Form LD-1"
         }
 
         # basic disclosure fields
         _disclosure = Disclosure(
             effective_date=parsed_form['datetimes']['effective_date'],
+            timezone='America/New_York',
             submitted_date=parsed_form['datetimes']['signature_date'],
             classification="lobbying"
         )
@@ -158,22 +159,18 @@ class UnitedStatesLobbyingRegistrationDisclosureScraper(
 
         _disclosure.add_identifier(
             identifier=parsed_form['_meta']['document_id'],
-            scheme="LDA:SOPR:filing-id"
+            scheme="urn:sopr:filing"
         )
 
         # disclosure extras
         _disclosure.extras = {}
         _disclosure.extras['registrant'] = {
-            'self_employed_individual':
-                parsed_form['registrant']['self_employed_individual'],
-            'general_description':
-                parsed_form['registrant']['registrant_general_description'],
+            'self_employed_individual': parsed_form['registrant']['self_employed_individual'],
+            'general_description': parsed_form['registrant']['registrant_general_description'],
             'signature': {
-                    "signature_date":
-                        parsed_form['datetimes']['signature_date'],
-                "signature":
-                        parsed_form['signature']
-                }
+                "signature_date": parsed_form['datetimes']['signature_date'],
+                "signature": parsed_form['signature']
+            }
         }
 
         _disclosure.extras['client'] = {
@@ -213,6 +210,16 @@ class UnitedStatesLobbyingRegistrationDisclosureScraper(
                 classification='company'
             )
 
+        _registrant.add_identifier(
+            identifier=parsed_form['registrant']['registrant_house_id'],
+            scheme='urn:house_clerk:registrant'
+        )
+
+        _registrant.add_identifier(
+            identifier=parsed_form['registrant']['registrant_senate_id'],
+            scheme='urn:sopr:registrant'
+        )
+
         registrant_contact_details = [
             {
                 "type": "address",
@@ -240,16 +247,16 @@ class UnitedStatesLobbyingRegistrationDisclosureScraper(
         ]
 
         registrant_contact_ppb = {
-                "type": "address",
-                "note": "principal place of business",
-                "value": '; '.join([
-                    p for p in [
-                        parsed_form['registrant']['registrant_ppb_city'],
-                        parsed_form['registrant']['registrant_ppb_state'],
-                        parsed_form['registrant']['registrant_ppb_zip'],
-                        parsed_form['registrant']['registrant_ppb_country']]
-                    if len(p) > 0]).strip(),
-            }
+            "type": "address",
+            "note": "principal place of business",
+            "value": '; '.join([
+                p for p in [
+                    parsed_form['registrant']['registrant_ppb_city'],
+                    parsed_form['registrant']['registrant_ppb_state'],
+                    parsed_form['registrant']['registrant_ppb_zip'],
+                    parsed_form['registrant']['registrant_ppb_country']]
+                if len(p) > 0]).strip(),
+        }
 
         if registrant_contact_ppb["value"]:
             registrant_contact_details.append(registrant_contact_ppb)
@@ -377,18 +384,18 @@ class UnitedStatesLobbyingRegistrationDisclosureScraper(
                     if len(p) > 0]).strip(),
             },
         ]
-        
+
         client_contact_ppb = {
-                "type": "address",
-                "note": "principal place of business",
-                "value": '; '.join([
-                    p for p in [
-                        parsed_form['client']['client_ppb_city'],
-                        parsed_form['client']['client_ppb_state'],
-                        parsed_form['client']['client_ppb_zip'],
-                        parsed_form['client']['client_ppb_country']]
-                    if len(p) > 0]).strip(),
-            }
+            "type": "address",
+            "note": "principal place of business",
+            "value": '; '.join([
+                p for p in [
+                    parsed_form['client']['client_ppb_city'],
+                    parsed_form['client']['client_ppb_state'],
+                    parsed_form['client']['client_ppb_zip'],
+                    parsed_form['client']['client_ppb_country']]
+                if len(p) > 0]).strip(),
+        }
 
         if client_contact_ppb["value"]:
             client_contact_details.append(client_contact_ppb)
@@ -479,20 +486,21 @@ class UnitedStatesLobbyingRegistrationDisclosureScraper(
                         if len(p) > 0]).strip(),
                 },
             ]
-        
+
             foreign_entity_contact_ppb = {
-                    "type": "address",
-                    "note": "principal place of business",
-                    "value": '; '.join([
-                        p for p in [
-                            fe['foreign_entity_ppb_city'],
-                            fe['foreign_entity_ppb_state'],
-                            fe['foreign_entity_ppb_country']]
-                        if len(p) > 0]),
-                }
+                "type": "address",
+                "note": "principal place of business",
+                "value": '; '.join([
+                    p for p in [
+                        fe['foreign_entity_ppb_city'],
+                        fe['foreign_entity_ppb_state'],
+                        fe['foreign_entity_ppb_country']]
+                    if len(p) > 0]),
+            }
 
             if foreign_entity_contact_ppb["value"]:
-                foreign_entity_contact_details.append(foreign_entity_contact_ppb)
+                foreign_entity_contact_details.append(
+                    foreign_entity_contact_ppb)
 
             for cd in foreign_entity_contact_details:
                 if cd['value'] != '':
@@ -577,7 +585,7 @@ class UnitedStatesLobbyingRegistrationDisclosureScraper(
         # build document
         _disclosure.add_document(
             note='submitted filing',
-            date=parsed_form['datetimes']['effective_date'],
+            date=parsed_form['datetimes']['effective_date'][:10],
             url=response.request.url
         )
 
@@ -604,18 +612,19 @@ class UnitedStatesLobbyingRegistrationDisclosureScraper(
             ]
 
             affiliated_organization_contact_ppb = {
-                    "type": "address",
-                    "note": "principal place of business",
-                    "value": '; '.join([
-                        p for p in [
-                            ao['affiliated_organization_ppb_city'],
-                            ao['affiliated_organization_ppb_state'],
-                            ao['affiliated_organization_ppb_country']]
-                        if len(p) > 0]).strip(),
-                }
+                "type": "address",
+                "note": "principal place of business",
+                "value": '; '.join([
+                    p for p in [
+                        ao['affiliated_organization_ppb_city'],
+                        ao['affiliated_organization_ppb_state'],
+                        ao['affiliated_organization_ppb_country']]
+                    if len(p) > 0]).strip(),
+            }
 
             if affiliated_organization_contact_ppb["value"]:
-                affiliated_organization_contact_details.append(affiliated_organization_contact_ppb)
+                affiliated_organization_contact_details.append(
+                    affiliated_organization_contact_ppb)
 
             for cd in affiliated_organization_contact_details:
                 _affiliated_organization.add_contact_detail(**cd)
@@ -693,13 +702,15 @@ class UnitedStatesLobbyingRegistrationDisclosureScraper(
                                       rt=registration_type),
             timezone='America/New_York',
             location='United States',
-            start_time=datetime.strptime(parsed_form['datetimes']['effective_date'],
-                                         '%Y-%m-%d %H:%M:%S').replace(tzinfo=NY_TZ),
+            start_time=datetime.strptime(
+                parsed_form['datetimes']['effective_date'],
+                '%Y-%m-%d %H:%M:%S').replace(tzinfo=NY_TZ),
             classification='registration'
         )
 
         # add participants
         _event.add_participant(type=_registrant._type,
+                               id=_registrant._id,
                                name=_registrant.name,
                                note="registrant")
 
@@ -757,6 +768,9 @@ class UnitedStatesLobbyingRegistrationDisclosureScraper(
 
         _client.add_source(**_source)
         yield _client
+
+        _main_contact.add_source(**_source)
+        yield _main_contact
 
         for ao in _affiliated_organizations:
             ao.add_source(**_source)
