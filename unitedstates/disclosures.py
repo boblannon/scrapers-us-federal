@@ -67,7 +67,6 @@ class UnitedStatesLobbyingDisclosureScraper(BaseDisclosureScraper):
 
             for result in results:
                 filing_type = result.xpath('td[3]')[0].text
-                filing_year = result.xpath('td[6]')[0].text
                 try:
                     m = re.search(_search_url_rgx, result.attrib['onclick'])
                 except KeyError:
@@ -84,8 +83,6 @@ class UnitedStatesLobbyingDisclosureScraper(BaseDisclosureScraper):
                     ))
                 _params = dict(parse_qsl(
                                urlparse(_doc_path).query))
-                _params['Type'] = filing_type
-                _params['Year'] = filing_year
                 if _params:
                     yield _params
                 else:
@@ -125,7 +122,7 @@ class UnitedStatesLobbyingDisclosureScraper(BaseDisclosureScraper):
             parsed_form = self.parse_filing(filename, response)
             if canonize_url(response.url) not in settings.url_blacklist:
                 disclosure = self.transform_parse(parsed_form, response)
-            yield disclosure
+                yield disclosure
 
 
 class UnitedStatesLobbyingRegistrationDisclosureScraper(
