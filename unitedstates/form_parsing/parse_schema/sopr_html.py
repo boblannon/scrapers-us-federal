@@ -198,13 +198,12 @@ ld1_schema = {
                 },
                 "registrant_house_id": {
                     "type": "string",
-                    "pattern": "\d+",
+                    "blank": True,
                     'path': '/html/body/table[2]/tbody/tr[2]/td[2]/div',
                     'parser': clean_text
                 },
                 "registrant_senate_id": {
                     "type": "string",
-                    "pattern": "\d+",
                     'path': '/html/body/table[2]/tbody/tr[2]/td[5]/div',
                     'parser': clean_text
                 }
@@ -338,6 +337,7 @@ ld1_schema = {
                     },
                     "affiliated_organization_state": {
                         "type": "string",
+                        "blank": True,
                         "even_odd": "odd",
                         'path': 'td[2]/table/tbody/tr/td[2]/div',
                         'parser': clean_text

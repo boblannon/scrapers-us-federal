@@ -12,6 +12,7 @@ from pytz import timezone
 from pupa import settings
 from pupa.scrape import BaseDisclosureScraper
 from pupa.scrape import Disclosure, Person, Organization, Event
+from pupa.utils import combine_dicts, canonize_url
 
 from unitedstates.ref import sopr_lobbying_reference
 
@@ -118,11 +119,12 @@ class UnitedStatesLobbyingDisclosureScraper(BaseDisclosureScraper):
                     settings.CACHE_DIR,
                     '{fn}.html'.format(fn=params['filingID'])
                 ),
-                method='POST',
-                body=params
+                method='GET',
+                params=params
             )
             parsed_form = self.parse_filing(filename, response)
-            disclosure = self.transform_parse(parsed_form, response)
+            if canonize_url(response.url) not in settings.url_blacklist:
+                disclosure = self.transform_parse(parsed_form, response)
             yield disclosure
 
 
@@ -141,15 +143,19 @@ class UnitedStatesLobbyingRegistrationDisclosureScraper(
     def transform_parse(self, parsed_form, response):
 
         _source = {
-            "url": "?".join([response.request.url, response.request.body]),
+            "url": response.url,
             "note": "LDA Form LD-1"
         }
 
         # basic disclosure fields
         _disclosure = Disclosure(
-            effective_date=parsed_form['datetimes']['effective_date'],
+            effective_date=datetime.strptime(
+                parsed_form['datetimes']['effective_date'],
+                '%Y-%m-%d %H:%M:%S').replace(tzinfo=NY_TZ),
             timezone='America/New_York',
-            submitted_date=parsed_form['datetimes']['signature_date'],
+            submitted_date=datetime.strptime(
+                parsed_form['datetimes']['signature_date'],
+                '%Y-%m-%d %H:%M:%S').replace(tzinfo=NY_TZ),
             classification="lobbying"
         )
 
@@ -192,33 +198,48 @@ class UnitedStatesLobbyingRegistrationDisclosureScraper(
 
         # # Registrant
         # build registrant
+        _registrant_self_employment = None
+
         if parsed_form['registrant']['self_employed_individual']:
+            n = ' '.join([p for p in [
+                parsed_form['registrant']['registrant_individual_prefix'],
+                parsed_form['registrant']['registrant_individual_firstname'],
+                parsed_form['registrant']['registrant_individual_lastname']
+            ] if len(p) > 0]).strip()
+
             _registrant = Person(
-                name=' '.join(
-                    [p for p in [
-                        parsed_form['registrant'][
-                            'registrant_individual_prefix'],
-                        parsed_form['registrant'][
-                            'registrant_individual_firstname'],
-                        parsed_form['registrant'][
-                            'registrant_individual_lastname']]
-                     if len(p) > 0]).strip()
+                name=n,
+                source_identified=True
+            )
+
+            _registrant_self_employment = Organization(
+                name='SELF-EMPLOYMENT of {n}'.format(n=n),
+                classification='company',
+                source_identified=True
+            )
+
+            _registrant.add_membership(
+                organization=_registrant_self_employment,
+                role='self_employed'
             )
         else:
             _registrant = Organization(
                 name=parsed_form['registrant']['registrant_org_name'],
-                classification='company'
+                classification='company',
+                source_identified=True
             )
 
-        _registrant.add_identifier(
-            identifier=parsed_form['registrant']['registrant_house_id'],
-            scheme='urn:house_clerk:registrant'
-        )
+        if len(parsed_form['registrant']['registrant_house_id']) > 0:
+            _registrant.add_identifier(
+                identifier=parsed_form['registrant']['registrant_house_id'],
+                scheme='urn:house_clerk:registrant'
+            )
 
-        _registrant.add_identifier(
-            identifier=parsed_form['registrant']['registrant_senate_id'],
-            scheme='urn:sopr:registrant'
-        )
+        if len(parsed_form['registrant']['registrant_senate_id']) > 0:
+            _registrant.add_identifier(
+                identifier=parsed_form['registrant']['registrant_senate_id'],
+                scheme='urn:sopr:registrant'
+            )
 
         registrant_contact_details = [
             {
@@ -334,7 +355,8 @@ class UnitedStatesLobbyingRegistrationDisclosureScraper(
         # # People
         # build contact
         _main_contact = Person(
-            name=parsed_form['registrant']['registrant_contact_name']
+            name=parsed_form['registrant']['registrant_contact_name'],
+            source_identified=True
         )
 
         main_contact_contact_details = [
@@ -357,17 +379,17 @@ class UnitedStatesLobbyingRegistrationDisclosureScraper(
             _registrant.add_member(name_or_person=_main_contact,
                                    role='main_contact')
         else:
-            _disclosure.add_entity(name=_main_contact.name,
-                                   type=_main_contact._type,
-                                   id=_main_contact._id,
-                                   note='main_contact')
-            _disclosure._related.append(_main_contact)
+            _registrant_self_employment.add_member(
+                name_or_person=_main_contact,
+                role='main_contact'
+            )
 
         # # Client
         # build client
         _client = Organization(
             name=parsed_form['client']['client_name'],
-            classification='company'
+            classification='company',
+            source_identified=True
         )
 
         client_contact_details = [
@@ -457,13 +479,24 @@ class UnitedStatesLobbyingRegistrationDisclosureScraper(
             ],
         }
 
+        # Collect Foreign Entities
         _foreign_entities = []
+        _foreign_entities_by_name = {}
         for fe in parsed_form['foreign_entities']:
-            _foreign_entity = Organization(
-                name=fe['foreign_entity_name'],
-                classification='company'
-            )
+            fe_extras = {}
+            fe_name = fe['foreign_entity_name']
 
+            # check for name-based duplicates
+            if fe_name in _foreign_entities_by_name:
+                _foreign_entity = _foreign_entities_by_name[fe_name]
+            else:
+                _foreign_entity = Organization(
+                    name=fe_name,
+                    classification='company',
+                    source_identified=True
+                )
+
+            # collect contact details
             foreign_entity_contact_details = [
                 {
                     "type": "address",
@@ -502,53 +535,62 @@ class UnitedStatesLobbyingRegistrationDisclosureScraper(
                 foreign_entity_contact_details.append(
                     foreign_entity_contact_ppb)
 
+            # add contact details
             for cd in foreign_entity_contact_details:
                 if cd['value'] != '':
                     _foreign_entity.add_contact_detail(**cd)
 
-            _foreign_entity.extras = {
-                "contact_details_structured": [
-                    {
-                        "type": "address",
-                        "note": "contact address",
-                        "parts": [
-                            {
-                                "note": "address",
-                                "value": fe['foreign_entity_address'],
-                            },
-                            {
-                                "note": "city",
-                                "value": fe['foreign_entity_city'],
-                            },
-                            {
-                                "note": "state",
-                                "value": fe['foreign_entity_state'],
-                            },
-                            {
-                                "note": "country",
-                                "value": fe['foreign_entity_country'],
-                            }
-                        ],
-                    },
-                    {
-                        "type": "address",
-                        "note": "principal place of business",
-                        "parts": [
-                            {
-                                "note": "state",
-                                "value": fe['foreign_entity_ppb_state'],
-                            },
-                            {
-                                "note": "country",
-                                "value": fe['foreign_entity_ppb_country'],
-                            }
-                        ],
-                    },
-                ],
-            }
+            # add extras
+            fe_extras["contact_details_structured"] = [
+                {
+                    "type": "address",
+                    "note": "contact address",
+                    "parts": [
+                        {
+                            "note": "address",
+                            "value": fe['foreign_entity_address'],
+                        },
+                        {
+                            "note": "city",
+                            "value": fe['foreign_entity_city'],
+                        },
+                        {
+                            "note": "state",
+                            "value": fe['foreign_entity_state'],
+                        },
+                        {
+                            "note": "country",
+                            "value": fe['foreign_entity_country'],
+                        }
+                    ],
+                },
+                {
+                    "type": "address",
+                    "note": "principal place of business",
+                    "parts": [
+                        {
+                            "note": "state",
+                            "value": fe['foreign_entity_ppb_state'],
+                        },
+                        {
+                            "note": "country",
+                            "value": fe['foreign_entity_ppb_country'],
+                        }
+                    ],
+                },
+            ]
 
-            _foreign_entities.append(_foreign_entity)
+            _foreign_entity.extras = combine_dicts(_foreign_entity.extras,
+                                                   fe_extras)
 
+            _foreign_entities_by_name[fe_name] = _foreign_entity
+
+        for unique_foreign_entity in _foreign_entities_by_name.values():
+            _foreign_entities.append(unique_foreign_entity)
+
+            # TODO: add a variant on memberships to represent inter-org
+            # relationships (associations, ownership, etc)
+            #
             # _client['memberships'].append({
             #     "id": _foreign_entity['id'],
             #     "classification": "organization",
@@ -559,43 +601,75 @@ class UnitedStatesLobbyingRegistrationDisclosureScraper(
             #     }
             # })
 
-        _lobbyists = []
+        # Collect Lobbyists
+        _lobbyists_by_name = {}
+
         for l in parsed_form['lobbyists']:
-            _lobbyist = Person(
-                name=' '.join([
-                    l['lobbyist_first_name'],
-                    l['lobbyist_last_name'],
-                    l['lobbyist_suffix']
-                ]).strip()
-            )
-            _lobbyist.extras['lda_covered_official_positions'] = []
+            l_extras = {}
+            l_name = ' '.join([l['lobbyist_first_name'],
+                               l['lobbyist_last_name'],
+                               l['lobbyist_suffix']
+                               ]).strip()
+
+            if l_name in _lobbyists_by_name:
+                _lobbyist = _lobbyists_by_name[l_name]
+            else:
+                _lobbyist = Person(
+                    name=l_name,
+                    source_identified=True
+                )
+
             if l['lobbyist_covered_official_position']:
-                _lobbyist.extras['lda_covered_official_positions'].append({
-                    'date_reported':
-                        parsed_form['datetimes']['effective_date'],
-                    'disclosure_id':
-                        _disclosure._id,
-                    'covered_official_position':
-                        l['lobbyist_covered_official_position'],
-                })
-            _registrant.add_member(_lobbyist, role='lobbyist')
-            _lobbyists.append(_lobbyist)
+                l_extras['lda_covered_official_positions'] = [
+                    {
+                        'date_reported':
+                            parsed_form['datetimes']['effective_date'],
+                        'covered_official_position':
+                            l['lobbyist_covered_official_position']
+                    },
+                ]
+
+            _lobbyist.extras = combine_dicts(_lobbyist.extras, l_extras)
+
+            _lobbyists_by_name[l_name] = _lobbyist
+
+        _lobbyists = []
+        for unique_lobbyist in _lobbyists_by_name.values():
+            _lobbyists.append(unique_lobbyist)
+
+        if _registrant._type == 'organization':
+            for l in _lobbyists:
+                _registrant.add_member(l, role='lobbyist')
+        else:
+            for l in _lobbyists:
+                _registrant_self_employment.add_member(l, role='lobbyist')
 
         # # Document
         # build document
         _disclosure.add_document(
             note='submitted filing',
             date=parsed_form['datetimes']['effective_date'][:10],
-            url=response.request.url
+            url=response.url
         )
 
-        # Affiliated orgs
+        # Collect Affiliated orgs
         _affiliated_organizations = []
+        _affiliated_organizations_by_name = {}
         for ao in parsed_form['affiliated_organizations']:
-            _affiliated_organization = Organization(
-                name=ao['affiliated_organization_name'],
-                classification='company'
-            )
+            ao_extras = {}
+            ao_name = ao['affiliated_organization_name']
+            if ao_name in _affiliated_organizations_by_name:
+                # There's already one by this name
+                _affiliated_organization = _affiliated_organizations_by_name[ao_name]
+            else:
+                # New affiliated org
+                _affiliated_organization = Organization(
+                    name=ao_name,
+                    classification='company',
+                    source_identified=True
+                )
+
+            # collect contact details
             affiliated_organization_contact_details = [
                 {
                     "type": "address",
@@ -626,69 +700,68 @@ class UnitedStatesLobbyingRegistrationDisclosureScraper(
                 affiliated_organization_contact_details.append(
                     affiliated_organization_contact_ppb)
 
+            # add contact details
             for cd in affiliated_organization_contact_details:
                 _affiliated_organization.add_contact_detail(**cd)
 
-            _affiliated_organization.extras = {
-                "contact_details_structured": [
-                    {
-                        "type": "address",
-                        "note": "contact address",
-                        "parts": [
-                            {
-                                "note": "address",
-                                "value": ao['affiliated_organization_address'],
-                            },
-                            {
-                                "note": "city",
-                                "value": ao['affiliated_organization_city'],
-                            },
-                            {
-                                "note": "state",
-                                "value": ao['affiliated_organization_state'],
-                            },
-                            {
-                                "note": "zip",
-                                "value": ao['affiliated_organization_zip'],
-                            },
-                            {
-                                "note": "country",
-                                "value": ao['affiliated_organization_country'],
-                            }
-                        ],
-                    },
-                    {
-                        "type": "address",
-                        "note": "principal place of business",
-                        "parts": [
-                            {
-                                "note": "city",
-                                "value":
-                                    ao['affiliated_organization_ppb_city'],
-                            },
-                            {
-                                "note": "state",
-                                "value":
-                                    ao['affiliated_organization_ppb_state'],
-                            },
-                            {
-                                "note": "country",
-                                "value":
-                                    ao['affiliated_organization_ppb_country'],
-                            }
-                        ],
-                    },
-                ],
-            }
-            _affiliated_organizations.append(_affiliated_organization)
+            ao_extras["contact_details_structured"] = [
+                {
+                    "type": "address",
+                    "note": "contact address",
+                    "parts": [
+                        {
+                            "note": "address",
+                            "value": ao['affiliated_organization_address'],
+                        },
+                        {
+                            "note": "city",
+                            "value": ao['affiliated_organization_city'],
+                        },
+                        {
+                            "note": "state",
+                            "value": ao['affiliated_organization_state'],
+                        },
+                        {
+                            "note": "zip",
+                            "value": ao['affiliated_organization_zip'],
+                        },
+                        {
+                            "note": "country",
+                            "value": ao['affiliated_organization_country'],
+                        }
+                    ],
+                },
+                {
+                    "type": "address",
+                    "note": "principal place of business",
+                    "parts": [
+                        {
+                            "note": "city",
+                            "value":
+                                ao['affiliated_organization_ppb_city'],
+                        },
+                        {
+                            "note": "state",
+                            "value":
+                                ao['affiliated_organization_ppb_state'],
+                        },
+                        {
+                            "note": "country",
+                            "value":
+                                ao['affiliated_organization_ppb_country'],
+                        }
+                    ],
+                },
+            ],
+
+            _affiliated_organization.extras = combine_dicts(
+                _affiliated_organization.extras, ao_extras)
+
+        for unique_affiliated_organization in _affiliated_organizations_by_name.values():
+            _affiliated_organizations.append(unique_affiliated_organization)
 
         # # Events & Agendas
-        # name (TODO: make fct for name gen)
-        # start
-        # client-reg registration (w/ issue codes/detail)
-        # client-reg-lobbyist registration
-        # build lobbyists on the fly
-
+        # name
         if parsed_form['registration_type']['new_registrant']:
             registration_type = 'New Client, New Registrant'
         elif parsed_form['registration_type']['is_amendment']:
@@ -698,8 +771,9 @@ class UnitedStatesLobbyingRegistrationDisclosureScraper(
 
         # Create registration event
         _event = Event(
-            name="{rn} - {rt}".format(rn=_registrant.name,
-                                      rt=registration_type),
+            name="{rn} - {rt}, {cn}".format(rn=_registrant.name,
+                                            rt=registration_type,
+                                            cn=_client.name),
             timezone='America/New_York',
             location='United States',
             start_time=datetime.strptime(
@@ -768,23 +842,49 @@ class UnitedStatesLobbyingRegistrationDisclosureScraper(
                                    type=_registrant._type,
                                    id=_registrant._id)
 
-        _registrant.add_source(**_source)
+        _registrant.add_source(
+            url=_source['url'],
+            note='registrant'
+        )
         yield _registrant
 
-        _client.add_source(**_source)
+        if _registrant_self_employment is not None:
+            _registrant_self_employment.add_source(
+                url=_source['url'],
+                note='registrant_self_employment'
+            )
+
+            yield _registrant_self_employment
+
+        _client.add_source(
+            url=_source['url'],
+            note='client'
+        )
         yield _client
 
-        _main_contact.add_source(**_source)
+        _main_contact.add_source(
+            url=_source['url'],
+            note='main_contact'
+        )
         yield _main_contact
 
         for ao in _affiliated_organizations:
-            ao.add_source(**_source)
+            ao.add_source(
+                url=_source['url'],
+                note='affiliated_organization'
+            )
             yield ao
         for fe in _foreign_entities:
-            fe.add_source(**_source)
+            fe.add_source(
+                url=_source['url'],
+                note='foreign_entity'
+            )
             yield fe
         for l in _lobbyists:
-            l.add_source(**_source)
+            l.add_source(
+                url=_source['url'],
+                note='lobbyist'
+            )
             yield l
 
         _event.add_source(**_source)
