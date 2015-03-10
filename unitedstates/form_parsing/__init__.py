@@ -2,6 +2,7 @@ import os
 import logging
 import json
 import datetime
+from io import StringIO
 
 from copy import deepcopy
 from collections import OrderedDict
@@ -13,7 +14,7 @@ import pupa.utils
 
 from validictory import ValidationError
 
-from .parse_schema.sopr_html import ld1_schema
+from .parse_schema import sopr_html, sopr_xml
 
 
 class Form(object):
@@ -47,6 +48,19 @@ class Form(object):
 
     def __getitem__(self, key):
         return self.as_dict()[key]
+
+    @property
+    def _id(self):
+        return self._record['_meta']['document_id']
+
+    @_id.setter
+    def _id(self, document_id):
+        if not self._record['_meta']:
+            self._record['_meta'] = {}
+        self._record['_meta']['document_id'] = document_id
+
+    def __str__(self):
+        return self._id
 
 
 class Parser(object):
@@ -96,8 +110,6 @@ class Parser(object):
     def do_parse(self, **kwargs):
         if not kwargs.get('root', False):
             raise Exception('No document root included')
-        if not kwargs.get('document_id', False):
-            raise Exception('No document id included')
 
         record = {'objects': defaultdict(int)}
         self.output_names = defaultdict(set)
@@ -195,8 +207,10 @@ class SchemaParser(Parser):
             evens = items[::2]
             odds = items[1::2]
             all_props = items_schema['properties']
-            even_props = [(p,s) for p,s in all_props.items() if s['even_odd'] == 'even']
-            odd_props = [(p,s) for p,s in all_props.items() if s['even_odd'] == 'odd']
+            even_props = [(p, s) for p, s in all_props.items()
+                          if s['even_odd'] == 'even']
+            odd_props = [(p, s) for p, s in all_props.items()
+                         if s['even_odd'] == 'odd']
             for even, odd in zip(evens, odds):
                 result = {}
                 for prop_name, prop_node in even_props:
@@ -213,9 +227,9 @@ class SchemaParser(Parser):
                     result_array.append(result)
         return result_array
 
-    def parse(self, root=None, document_id=None):
+    def parse(self, root=None, **kwargs):
         if self.schema['type'] == 'object':
-            form = self.form_model(document_id)
+            form = self.form_model(**kwargs)
             for prop, schema_node in self.schema['properties'].items():
                 if prop == "_meta":
                     continue
@@ -229,7 +243,7 @@ class SchemaParser(Parser):
                                       'where top level is object')
 
 
-class HTMLSchemaParser(SchemaParser):
+class LXMLSchemaParser(SchemaParser):
 
     def extract_location(self, container, path, prop, expect_array=False,
                          missing_okay=False):
@@ -243,41 +257,43 @@ class HTMLSchemaParser(SchemaParser):
             else:
                 container_loc = container.getroottree().getpath(container)
                 self.error("\n    ".join(
-                        ["no match for property {n}",
-                         "container: {c}",
-                         "path: {p}\n"]
-                    ).format(n=prop,
-                             c=container_loc,
-                             p=path)
-                )
-                raise Exception
+                           ["no match for property {n}",
+                            "container: {c}",
+                            "path: {p}\n"]
+                           ).format(n=prop,
+                                    c=container_loc,
+                                    p=path)
+                           )
         else:
             self.debug("\n    ".join(
-                    ["match found for property {n}",
-                     "container: {c}",
-                     "path: {p}\n",
-                     "found: {f}"]
-                ).format(n=prop,
-                         c=container.getroottree().getpath(container),
-                         p=path,
-                         f=found)
-            )
+                       ["match found for property {n}",
+                        "container: {c}",
+                        "path: {p}\n",
+                        "found: {f}"]
+                       ).format(n=prop,
+                                c=container.getroottree().getpath(container),
+                                p=path,
+                                f=found)
+                       )
 
             if expect_array:
                 return found
             else:
                 if len(found) > 1:
                     self.warning("\n    ".join(
-                            ["more than one result for {n}",
-                             "container: {c}",
-                             "path: {p}\n"]
-                        ).format(n=prop,
-                                 c=container.getroottree().getpath(container),
-                                 p=path)
-                    )
+                                 ["more than one result for {n}",
+                                  "container: {c}",
+                                  "path: {p}\n"]
+                                 ).format(n=prop,
+                                          c=container.getroottree().getpath(container),
+                                          p=path)
+                                 )
                     return found[0]
                 else:
                     return found[0]
+
+
+class HTMLSchemaParser(LXMLSchemaParser):
 
     def parse(self, **kwargs):
         from lxml.html import HTMLParser
@@ -289,29 +305,50 @@ class HTMLSchemaParser(SchemaParser):
                              document_id=kwargs['document_id'])
 
 
+class XMLSchemaParser(LXMLSchemaParser):
+
+    def parse(self, **kwargs):
+        etree_root = etree.parse(kwargs['root'])
+
+        object_path = self.form_model.schema['object_path']
+
+        for object_root in etree_root.xpath(object_path):
+            yield from super().parse(root=object_root)
+
+
 class LobbyingRegistrationForm(Form):
 
     _form_jurisdiction = 'unitedstates'
     _form_type = 'LD1'
-    schema = ld1_schema
+    schema = sopr_html.ld1_schema
 
-    def __init__(self, document_id):
+    def __init__(self, **kwargs):
         super().__init__()
-        self._id = document_id
+        self._id = kwargs['document_id']
 
-    @property
-    def _id(self):
-        return self._record['_meta']['document_id']
 
-    @_id.setter
-    def _id(self, document_id):
-        if not self._record['_meta']:
-            self._record['_meta'] = {}
-        self._record['_meta']['document_id'] = document_id
-
-    def __str__(self):
-        return self._id
+class SenatePostEmploymentForm(Form):
+    _form_jurisdiction = 'unitedstates'
+    _form_type = 'post_employment'
+    schema = sopr_xml.post_employment_schema
 
 
 class UnitedStatesLobbyingRegistrationParser(HTMLSchemaParser):
     form_model = LobbyingRegistrationForm
+
+
+class UnitedStatesSenatePostEmploymentParser(XMLSchemaParser):
+    form_model = SenatePostEmploymentForm
+
+    def parse(self, **kwargs):
+        for form in super().parse(**kwargs):
+            name_str = '-'.join([s for s in [form._record['name']['name_first'],
+                                             form._record['name']['name_middle'],
+                                             form._record['name']['name_last']]
+                                 if s is not None])
+            office_str = form._record['office_name']
+            date_str = form._record['restriction_period']['restriction_period_begin_date']
+            form._id = '_'.join([s.replace(' ', '-') for s in [name_str,
+                                                               office_str,
+                                                               date_str]])
+            yield form

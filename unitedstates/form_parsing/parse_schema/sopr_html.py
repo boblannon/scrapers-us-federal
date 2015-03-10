@@ -2,18 +2,14 @@ import copy
 
 from unitedstates.ref import sopr_lobbying_reference
 
-from pupa.scrape.schemas.common import fuzzy_datetime_blank
-
 from ..utils.data_munge import clean_text, checkbox_boolean, parse_datetime
+
+from .common import pupa_datetime_blank 
 
 
 sopr_general_issue_codes = [i['issue_code'] for i in
                             sopr_lobbying_reference.GENERAL_ISSUE_CODES]
 
-def pupa_datetime(parse_properties):
-    pd = copy.deepcopy(fuzzy_datetime_blank)
-    pd.update(parse_properties)
-    return pd
 
 ld1_schema = {
     "title": "Lobbying Registration",
@@ -46,11 +42,11 @@ ld1_schema = {
         "datetimes": {
             "type": "object",
             "properties": {
-                "signature_date": pupa_datetime({
+                "signature_date": pupa_datetime_blank({
                     'path': '/html/body/table[20]/tbody/tr/td[4]/div',
                     'parser': parse_datetime
                 }),
-                "effective_date": pupa_datetime({
+                "effective_date": pupa_datetime_blank({
                     'path': '/html/body/table[2]/tbody/tr[1]/td[3]/div',
                     'parser': parse_datetime
                 })
@@ -776,7 +772,7 @@ transformed_ld2_schema = {
                         }
                     }
                 },
-                "removed_affiliated_organizations":  {
+                "removed_affiliated_organizations": {
                     "items": {
                         "type": "object",
                         "properties": {

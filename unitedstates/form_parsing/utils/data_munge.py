@@ -1,9 +1,10 @@
 from datetime import datetime
 import locale
+from functools import reduce
 
 REPLACE_MAP = {u'&#160;': u'',
-               u'\xa0':  u'',
-               u'\u200b':  u'',
+               u'\xa0': u'',
+               u'\u200b': u'',
                u'&nbsp;': u''}
 
 locale.setlocale(locale.LC_ALL, 'en_US.UTF-8')
@@ -14,6 +15,7 @@ DATE_FORMATS = ['%m/%d/%Y',
                 '%Y/%m/%d',
                 '%m-%d-%Y',
                 '%m-%d-%y']
+
 
 def get_key(my_dict, key):
     return reduce(dict.get, key.split("."), my_dict)
@@ -60,6 +62,24 @@ def parse_datetime(e):
         for f in DATE_FORMATS:
             try:
                 parsed = datetime.strptime(s, f).isoformat(sep=' ')
+            except ValueError:
+                continue
+            else:
+                return parsed
+        else:
+            return s
+    else:
+        return None
+
+
+def parse_date(e):
+    s = clean_text(e)
+    parsed = None
+    if s:
+        f = 0
+        for f in DATE_FORMATS:
+            try:
+                parsed = datetime.strptime(s, f).strftime('%Y-%m-%d')
             except ValueError:
                 continue
             else:
@@ -137,8 +157,8 @@ def parse_array(array, children):
 
 
 def parse_even_odd(array, children):
-    for even, odd in [(array[i], array[i+1])
-                      for i in xrange(0, len(array), 2)]:
+    for even, odd in [(array[i], array[i + 1])
+                      for i in range(0, len(array), 2)]:
         record = {}
         for child in children['even']:
             _parser = child['parser']
