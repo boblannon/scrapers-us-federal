@@ -1030,12 +1030,15 @@ class UnitedStatesSenatePostEmploymentScraper(BaseDisclosureScraper):
         self.build_parser()
 
         for parsed_form in self._parser.do_parse(root=post_employment_xml):
-            self.transform_parse(parsed_form, response)
+            yield from self.transform_parse(parsed_form, response)
 
     def transform_parse(self, parsed_form, response):
         _source = {
             "url": response.url,
-            "note": json.dumps(parsed_form, sort_keys=True)
+            "note": json.dumps({'office_name': parsed_form['office_name'],
+                                'restriction_period': parsed_form['restriction_period'],
+                                'name': parsed_form['name']},
+                               sort_keys=True)
         }
 
         _disclosure = Disclosure(
@@ -1055,8 +1058,14 @@ class UnitedStatesSenatePostEmploymentScraper(BaseDisclosureScraper):
 
         _disclosure.extras['office_name'] = parsed_form["office_name"]
 
+        registrant_name = ' '.join([s for s in
+                                    [parsed_form['name']['name_first'],
+                                     parsed_form['name']['name_middle'],
+                                     parsed_form['name']['name_last']]
+                                    if s is not None])
+
         _registrant = Person(
-            name=parsed_form['name'],
+            name=registrant_name,
             source_identified=True
         )
 
