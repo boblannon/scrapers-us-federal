@@ -1,5 +1,6 @@
 from datetime import datetime
 import locale
+import re
 from functools import reduce
 
 REPLACE_MAP = {u'&#160;': u'',
@@ -15,6 +16,20 @@ DATE_FORMATS = ['%m/%d/%Y',
                 '%Y/%m/%d',
                 '%m-%d-%Y',
                 '%m-%d-%y']
+
+LEAP_DAY_CHECKS = [
+    re.compile(r'^(?P<year>(19|20)[0-9]{2})'
+               r'[/-]'
+               r'(?P<month>0?2)'
+               r'[/-]'
+               r'(?P<day>29)$'),
+
+    re.compile(r'^(?P<month>0?2)'
+               r'[/-]'
+               r'(?P<day>29)'
+               r'[/-]'
+               r'(?P<year>(19|20)?[0-9]{2})$')
+]
 
 
 def get_key(my_dict, key):
@@ -85,6 +100,14 @@ def parse_date(e):
             else:
                 return parsed
         else:
+            for p in LEAP_DAY_CHECKS:
+                m = p.match(s)
+                if m is not None:
+                    groups = m.groupdict()
+                    adjusted = datetime(year=int(groups['year']),
+                                        month=int(groups['month']),
+                                        day=28)
+                    return adjusted.strftime('%Y-%m-%d')
             return s
     else:
         return None
