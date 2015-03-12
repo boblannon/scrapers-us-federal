@@ -3,6 +3,8 @@ import json
 import re
 from datetime import datetime
 from urllib.parse import urlparse, parse_qsl
+from io import BytesIO
+from zipfile import ZipFile
 
 from lxml.html import HTMLParser
 from lxml import etree
@@ -18,7 +20,9 @@ from unitedstates.ref import sopr_lobbying_reference
 
 from .form_parsing.utils import mkdir_p
 
-from .form_parsing import UnitedStatesLobbyingRegistrationParser
+from .form_parsing import (UnitedStatesLobbyingRegistrationParser,
+                           UnitedStatesSenatePostEmploymentParser,
+                           UnitedStatesHousePostEmploymentParser)
 
 NY_TZ = timezone('America/New_York')
 
@@ -28,7 +32,7 @@ class UnitedStatesLobbyingDisclosureScraper(BaseDisclosureScraper):
     start_date = datetime.today()
     end_date = datetime.today()
     filing_types = sopr_lobbying_reference.FILING_TYPES
-    parse_dir = settings.PARSED_FORM_DIR
+    parse_dir = os.path.join(settings.PARSED_FORM_DIR, 'lobbying', 'sopr')
 
     def _build_date_range(self, start_date, end_date):
         if start_date:
@@ -106,6 +110,9 @@ class UnitedStatesLobbyingDisclosureScraper(BaseDisclosureScraper):
 
     def scrape(self, start_date=None, end_date=None):
         self.authority = self.jurisdiction._sopr
+
+        if not os.path.exists(self.parse_dir):
+            mkdir_p(self.parse_dir)
 
         self._build_date_range(start_date, end_date)
 
@@ -886,5 +893,204 @@ class UnitedStatesLobbyingRegistrationDisclosureScraper(
 
         _event.add_source(**_source)
         yield _event
+        _disclosure.add_source(**_source)
+        yield _disclosure
+
+
+class UnitedStatesHousePostEmploymentScraper(BaseDisclosureScraper):
+    parse_dir = os.path.join(settings.PARSED_FORM_DIR, 'post_employment',
+                             'house')
+
+    def build_parser(self):
+        self._parser = UnitedStatesHousePostEmploymentParser(
+            self.jurisdiction,
+            self.parse_dir,
+            strict_validation=True
+        )
+
+    def scrape(self):
+        self.authority = self.jurisdiction._house_clerk
+
+        if not os.path.exists(self.parse_dir):
+            mkdir_p(self.parse_dir)
+
+        filename, response = self.urlretrieve(
+            'http://clerk.house.gov/public_disc/post-employment/PostEmployment.zip',
+            filename=os.path.join(settings.CACHE_DIR, 'PostEmployment.zip')
+        )
+
+        zip_file = ZipFile(BytesIO(response.content))
+
+        post_employment_xml = zip_file.read('PostEmployment.xml')
+
+        for parsed_form in self._parser.do_parse(root=post_employment_xml):
+            self.transform_parse(parsed_form, response)
+
+    def transform_parse(self, parsed_form, response):
+        _source = {
+            "url": response.url,
+            "note": json.dumps(parsed_form, sort_keys=True)
+        }
+
+        _disclosure = Disclosure(
+            effective_date=datetime.strptime(
+                parsed_form['termination_date'],
+                '%Y-%m-%d').replace(tzinfo=NY_TZ),
+            timezone='America/New_York',
+            submitted_date=datetime.strptime(
+                parsed_form['termination_date'],
+                '%Y-%m-%d').replace(tzinfo=NY_TZ),
+            classification="lobbying",
+        )
+
+        _disclosure.add_authority(name=self.authority.name,
+                                  type=self.authority._type,
+                                  id=self.authority._id)
+
+        _disclosure.extras['office_name'] = parsed_form["office_name"]
+
+        _registrant = Person(
+            name=parsed_form['employee_name'],
+            source_identified=True
+        )
+
+        _disclosure.add_registrant(name=_registrant.name,
+                                   type=_registrant._type,
+                                   id=_registrant._id)
+
+        _post_employment_event = Event(
+            name="{rn} - {rt}, via ({a})".format(rn=_registrant.name,
+                                                 rt="post-employment period",
+                                                 a="House Clerk"),
+            timezone='America/New_York',
+            location='United States',
+            start_time=datetime.strptime(
+                parsed_form['termination_date'],
+                '%Y-%m-%d').replace(tzinfo=NY_TZ),
+            end_time=datetime.strptime(
+                parsed_form['lobbying_eligibility_date'],
+                '%Y-%m-%d').replace(tzinfo=NY_TZ),
+            classification='post_employment'
+        )
+
+        _post_employment_event.add_participant(type=_registrant._type,
+                                               id=_registrant._id,
+                                               name=_registrant.name,
+                                               note="registrant")
+
+        _post_employment_event.extras['office_name'] = parsed_form["office_name"]
+
+        _post_employment_event.add_source(**_source)
+
+        _post_employment_event.add_source(**_source)
+        yield _post_employment_event
+
+        _registrant.add_source(**_source)
+        yield _registrant
+
+        _disclosure.add_source(**_source)
+        yield _disclosure
+
+
+class UnitedStatesSenatePostEmploymentScraper(BaseDisclosureScraper):
+    parse_dir = os.path.join(settings.PARSED_FORM_DIR, 'post_employment',
+                             'senate')
+
+    def build_parser(self):
+        self._parser = UnitedStatesSenatePostEmploymentParser(
+            self.jurisdiction,
+            self.parse_dir,
+            strict_validation=True
+        )
+
+    def scrape(self, year=None):
+        self.authority = self.jurisdiction._house_clerk
+
+        if not os.path.exists(self.parse_dir):
+            mkdir_p(self.parse_dir)
+
+        current_year = datetime.today().year
+
+        if year is None:
+            year = current_year
+
+        if year == current_year:
+            url_template = 'http://www.senate.gov/legislative/termination_disclosure/report{year}.xml'
+        else:
+            url_template = 'http://www.senate.gov/legislative/termination_disclosure/{year}/report{year}.xml'
+
+        filename, response = self.urlretrieve(
+            url_template.format(year=year),
+            filename=os.path.join(settings.CACHE_DIR,
+                                  'report{}.xml'.format(year))
+        )
+
+        post_employment_xml = BytesIO(response.content)
+
+        self.build_parser()
+
+        for parsed_form in self._parser.do_parse(root=post_employment_xml):
+            self.transform_parse(parsed_form, response)
+
+    def transform_parse(self, parsed_form, response):
+        _source = {
+            "url": response.url,
+            "note": json.dumps(parsed_form, sort_keys=True)
+        }
+
+        _disclosure = Disclosure(
+            effective_date=datetime.strptime(
+                parsed_form['restriction_period']['restriction_period_begin_date'],
+                '%Y-%m-%d').replace(tzinfo=NY_TZ),
+            timezone='America/New_York',
+            submitted_date=datetime.strptime(
+                parsed_form['restriction_period']['restriction_period_begin_date'],
+                '%Y-%m-%d').replace(tzinfo=NY_TZ),
+            classification="lobbying",
+        )
+
+        _disclosure.add_authority(name=self.authority.name,
+                                  type=self.authority._type,
+                                  id=self.authority._id)
+
+        _disclosure.extras['office_name'] = parsed_form["office_name"]
+
+        _registrant = Person(
+            name=parsed_form['name'],
+            source_identified=True
+        )
+
+        _disclosure.add_registrant(name=_registrant.name,
+                                   type=_registrant._type,
+                                   id=_registrant._id)
+
+        _post_employment_event = Event(
+            name="{rn} - {rt}, (via {a})".format(rn=_registrant.name,
+                                                 rt="post-employment period",
+                                                 a="Senate"),
+            timezone='America/New_York',
+            location='United States',
+            start_time=datetime.strptime(
+                parsed_form['restriction_period']['restriction_period_begin_date'],
+                '%Y-%m-%d').replace(tzinfo=NY_TZ),
+            end_time=datetime.strptime(
+                parsed_form['restriction_period']['restriction_period_end_date'],
+                '%Y-%m-%d').replace(tzinfo=NY_TZ),
+            classification='post_employment'
+        )
+
+        _post_employment_event.add_participant(type=_registrant._type,
+                                               id=_registrant._id,
+                                               name=_registrant.name,
+                                               note="registrant")
+
+        _post_employment_event.extras['office_name'] = parsed_form["office_name"]
+
+        _post_employment_event.add_source(**_source)
+        yield _post_employment_event
+
+        _registrant.add_source(**_source)
+        yield _registrant
+
         _disclosure.add_source(**_source)
         yield _disclosure

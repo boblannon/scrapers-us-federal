@@ -1,6 +1,8 @@
 from pupa.scrape import Jurisdiction, Organization
 from .legislative import UnitedStatesLegislativeScraper
-from .disclosures import UnitedStatesLobbyingRegistrationDisclosureScraper
+from .disclosures import (UnitedStatesLobbyingRegistrationDisclosureScraper,
+                          UnitedStatesHousePostEmploymentScraper,
+                          UnitedStatesSenatePostEmploymentScraper)
 
 
 class UnitedStates(Jurisdiction):
@@ -20,6 +22,10 @@ class UnitedStates(Jurisdiction):
         "congress": UnitedStatesLegislativeScraper,
         "lobbying_registrations":
             UnitedStatesLobbyingRegistrationDisclosureScraper,
+        "house_post_employment":
+            UnitedStatesHousePostEmploymentScraper,
+        "senate_post_employment":
+            UnitedStatesSenatePostEmploymentScraper
         # Executive Scraper here
     }
 
@@ -79,3 +85,19 @@ class UnitedStates(Jurisdiction):
         self._sopr = sopr
 
         yield sopr
+
+        house_clerk = Organization(
+            name="Office of the Clerk, US House",
+            classification="office",
+            parent_id=house._id,
+        )
+
+        house_clerk.add_contact_detail(type="voice",
+                                       value="202-225-7000")
+
+        house_clerk.add_source(url="http://clerk.house.gov/",
+                               note="Home page")
+
+        self._house_clerk = house_clerk
+
+        yield house_clerk

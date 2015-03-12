@@ -2,7 +2,6 @@ import os
 import logging
 import json
 import datetime
-from io import StringIO
 
 from copy import deepcopy
 from collections import OrderedDict
@@ -14,7 +13,7 @@ import pupa.utils
 
 from validictory import ValidationError
 
-from .parse_schema import sopr_html, sopr_xml
+from .parse_schema import sopr_html, sopr_xml, house_xml
 
 
 class Form(object):
@@ -333,6 +332,12 @@ class SenatePostEmploymentForm(Form):
     schema = sopr_xml.post_employment_schema
 
 
+class HousePostEmploymentForm(Form):
+    _form_jurisdiction = 'unitedstates'
+    _form_type = 'post_employment'
+    schema = house_xml.post_employment_schema
+
+
 class UnitedStatesLobbyingRegistrationParser(HTMLSchemaParser):
     form_model = LobbyingRegistrationForm
 
@@ -348,7 +353,23 @@ class UnitedStatesSenatePostEmploymentParser(XMLSchemaParser):
                                  if s is not None])
             office_str = form._record['office_name']
             date_str = form._record['restriction_period']['restriction_period_begin_date']
-            form._id = '_'.join([s.replace(' ', '-') for s in [name_str,
+            form._id = '_'.join([s.replace(' ', '-') for s in ['senate-post-employment',
+                                                               name_str,
+                                                               office_str,
+                                                               date_str]])
+            yield form
+
+
+class UnitedStatesHousePostEmploymentParser(XMLSchemaParser):
+    form_model = HousePostEmploymentForm
+
+    def parse(self, **kwargs):
+        for form in super().parse(**kwargs):
+            name_str = form._record['employee_name']
+            office_str = form._record['office_name']
+            date_str = form._record['termination_date']
+            form._id = '_'.join([s.replace(' ', '-') for s in ['house-post-employment',
+                                                               name_str,
                                                                office_str,
                                                                date_str]])
             yield form
