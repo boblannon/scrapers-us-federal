@@ -9,7 +9,7 @@ from zipfile import ZipFile
 from lxml.html import HTMLParser
 from lxml import etree
 
-from pytz import timezone
+import pytz
 
 from pupa import settings
 from pupa.scrape import BaseDisclosureScraper
@@ -24,7 +24,7 @@ from .form_parsing import (UnitedStatesLobbyingRegistrationParser,
                            UnitedStatesSenatePostEmploymentParser,
                            UnitedStatesHousePostEmploymentParser)
 
-NY_TZ = timezone('America/New_York')
+NY_TZ = pytz.timezone('America/New_York')
 
 
 class UnitedStatesLobbyingDisclosureScraper(BaseDisclosureScraper):
@@ -921,15 +921,21 @@ class UnitedStatesHousePostEmploymentScraper(BaseDisclosureScraper):
 
         zip_file = ZipFile(BytesIO(response.content))
 
-        post_employment_xml = zip_file.read('PostEmployment.xml')
+        post_employment_xml = BytesIO(zip_file.read('PostEmployment.xml'))
+
+        self.build_parser()
 
         for parsed_form in self._parser.do_parse(root=post_employment_xml):
-            self.transform_parse(parsed_form, response)
+            yield from self.transform_parse(parsed_form, response)
 
     def transform_parse(self, parsed_form, response):
         _source = {
             "url": response.url,
-            "note": json.dumps(parsed_form, sort_keys=True)
+            "note": json.dumps({'office_name': parsed_form['office_name'],
+                                'termination_date': parsed_form['termination_date'],
+                                'lobbying_eligibility_date': parsed_form['lobbying_eligibility_date'],
+                                'name': parsed_form['employee_name']},
+                               sort_keys=True)
         }
 
         _disclosure = Disclosure(
@@ -940,7 +946,7 @@ class UnitedStatesHousePostEmploymentScraper(BaseDisclosureScraper):
             submitted_date=datetime.strptime(
                 parsed_form['termination_date'],
                 '%Y-%m-%d').replace(tzinfo=NY_TZ),
-            classification="lobbying",
+            classification="post_employment",
         )
 
         _disclosure.add_authority(name=self.authority.name,
@@ -954,14 +960,28 @@ class UnitedStatesHousePostEmploymentScraper(BaseDisclosureScraper):
             source_identified=True
         )
 
+        _office = Organization(
+            name=parsed_form['office_name'],
+            classification='office',
+            parent_id=self.jurisdiction._house,
+            source_identified=True
+        )
+
+        _office.add_member(
+            _registrant,
+            role='employee',
+            end_date=parsed_form['termination_date'],
+        )
+
         _disclosure.add_registrant(name=_registrant.name,
                                    type=_registrant._type,
                                    id=_registrant._id)
 
         _post_employment_event = Event(
-            name="{rn} - {rt}, via ({a})".format(rn=_registrant.name,
-                                                 rt="post-employment period",
-                                                 a="House Clerk"),
+            name="{rn} - {rt}, {o} (via {a})".format(rn=_registrant.name,
+                                                     rt="post-employment period",
+                                                     o=_office.name,
+                                                     a="House Clerk"),
             timezone='America/New_York',
             location='United States',
             start_time=datetime.strptime(
@@ -981,9 +1001,10 @@ class UnitedStatesHousePostEmploymentScraper(BaseDisclosureScraper):
         _post_employment_event.extras['office_name'] = parsed_form["office_name"]
 
         _post_employment_event.add_source(**_source)
-
-        _post_employment_event.add_source(**_source)
         yield _post_employment_event
+
+        _office.add_source(**_source)
+        yield _office
 
         _registrant.add_source(**_source)
         yield _registrant
@@ -1049,7 +1070,7 @@ class UnitedStatesSenatePostEmploymentScraper(BaseDisclosureScraper):
             submitted_date=datetime.strptime(
                 parsed_form['restriction_period']['restriction_period_begin_date'],
                 '%Y-%m-%d').replace(tzinfo=NY_TZ),
-            classification="lobbying",
+            classification="post_employment",
         )
 
         _disclosure.add_authority(name=self.authority.name,
@@ -1069,14 +1090,28 @@ class UnitedStatesSenatePostEmploymentScraper(BaseDisclosureScraper):
             source_identified=True
         )
 
+        _office = Organization(
+            name=parsed_form['office_name'],
+            classification='office',
+            parent_id=self.jurisdiction._senate,
+            source_identified=True
+        )
+
+        _office.add_member(
+            _registrant,
+            role='employee',
+            end_date=parsed_form['restriction_period']['restriction_period_begin_date'],
+        )
+
         _disclosure.add_registrant(name=_registrant.name,
                                    type=_registrant._type,
                                    id=_registrant._id)
 
         _post_employment_event = Event(
-            name="{rn} - {rt}, (via {a})".format(rn=_registrant.name,
-                                                 rt="post-employment period",
-                                                 a="Senate"),
+            name="{rn} - {rt}, {o} (via {a})".format(rn=_registrant.name,
+                                                     rt="post-employment period",
+                                                     o=_office.name,
+                                                     a="Senate Office of Public Record"),
             timezone='America/New_York',
             location='United States',
             start_time=datetime.strptime(
@@ -1097,6 +1132,9 @@ class UnitedStatesSenatePostEmploymentScraper(BaseDisclosureScraper):
 
         _post_employment_event.add_source(**_source)
         yield _post_employment_event
+
+        _office.add_source(**_source)
+        yield _office
 
         _registrant.add_source(**_source)
         yield _registrant
