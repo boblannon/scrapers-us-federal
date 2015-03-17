@@ -8,6 +8,6 @@ echo $last_date
 
 until [ "$the_date" == "$last_date" ]
 do
-    pupa --debug --loglevel INFO update unitedstates lobbying_registrations start_date=$the_date end_date=$the_date --fastmode;
+    pupa --loglevel ERROR update unitedstates lobbying_registrations start_date=$the_date end_date=$the_date --fastmode;
     the_date=$(date --date "$the_date 1 day" +"%Y-%m-%d");
 done
