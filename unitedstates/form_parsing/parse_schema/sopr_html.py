@@ -127,13 +127,13 @@ ld1_schema = {
                 },
                 "registrant_state": {
                     "type": "string",
-                    "pattern": "[A-Z]{2}",
+                    "blank": True,
                     'path': '/html/body/table[5]/tbody/tr/td[4]/div',
                     'parser': clean_text
                 },
                 "registrant_zip": {
                     "type": "string",
-                    "pattern": "^\d{5}(?:[-\s]\d{4})?$",
+                    "blank": True,
                     'path': '/html/body/table[5]/tbody/tr/td[6]/div',
                     'parser': clean_text
                 },
@@ -340,6 +340,7 @@ ld1_schema = {
                     },
                     "affiliated_organization_zip": {
                         "type": "string",
+                        "blank": True,
                         "even_odd": "odd",
                         'path': 'td[2]/table/tbody/tr/td[3]/div',
                         'parser': clean_text
@@ -449,12 +450,14 @@ ld1_schema = {
                     "foreign_entity_amount": {
                         "type": "string",
                         "even_odd": "odd",
+                        "blank": True,
                         'path': 'td[4]/div',
                         'parser': clean_text
                     },
                     "foreign_entity_ownership_percentage": {
                         "type": "string",
                         "even_odd": "odd",
+                        "blank": True,
                         'path': 'td[5]/div',
                         'parser': clean_text
                     }
@@ -482,6 +485,7 @@ ld1_schema = {
                     "lobbyist_last_name": {
                         "type": "string",
                         'path': 'td[2]',
+                        "blank": True,
                         'parser': clean_text
                     },
                     "lobbyist_covered_official_position": {
@@ -591,11 +595,9 @@ transformed_ld2_schema = {
                 },
                 "registrant_state": {
                     "type": "string",
-                    "pattern": "[A-Z]{2}"
                 },
                 "registrant_zip": {
                     "type": "string",
-                    "pattern": "^\d{5}(?:[-\s]\d{4})?$"
                 },
                 "registrant_country": {
                     "type": "string"
