@@ -69,29 +69,42 @@ class UnitedStatesLobbyingDisclosureScraper(BaseDisclosureScraper):
                             json.dumps(search_params, indent=2))
                 raise Exception(error_msg)
 
+            # we're going to skip duplicate submissions on the same day
+            results_seen = []
+
             for result in results:
                 filing_type = result.xpath('td[3]')[0].text
-                try:
-                    m = re.search(_search_url_rgx, result.attrib['onclick'])
-                except KeyError:
-                    self.error('element {} has no onclick attribute'.format(
-                        etree.tostring(result)))
-                try:
-                    _doc_path = m.groups()[0]
-                except AttributeError:
-                    self.error('no matches found for search_rgx')
-                    self.debug('\n{r}\n{a}\n{u}'.format(
-                        r=_search_url_rgx.pattern,
-                        a=result.attrib['onclick'],
-                        u=response.request.url
-                    ))
-                _params = dict(parse_qsl(
-                               urlparse(_doc_path).query))
-                if _params:
-                    yield _params
+                registrant_name = result.xpath('td[1]')[0].text
+                client_name = result.xpath('td[2]')[0].text
+                filing_date = result.xpath('td[5]')[0].text
+
+                # this is how we define duplicates
+                result_key = (registrant_name, client_name, filing_type, filing_date)
+                if result_key not in results_seen:
+                    try:
+                        m = re.search(_search_url_rgx, result.attrib['onclick'])
+                    except KeyError:
+                        self.error('element {} has no onclick attribute'.format(
+                            etree.tostring(result)))
+                    try:
+                        _doc_path = m.groups()[0]
+                    except AttributeError:
+                        self.error('no matches found for search_rgx')
+                        self.debug('\n{r}\n{a}\n{u}'.format(
+                            r=_search_url_rgx.pattern,
+                            a=result.attrib['onclick'],
+                            u=response.request.url
+                        ))
+                    _params = dict(parse_qsl(
+                                   urlparse(_doc_path).query))
+                    if _params:
+                        results_seen.append(result_key)
+                        yield _params
+                    else:
+                        self.error('unable to parse {}'.format(
+                            etree.tostring(result)))
                 else:
-                    self.error('unable to parse {}'.format(
-                        etree.tostring(result)))
+                    continue
 
     def parse_filing(self, filename, response):
         mkdir_p(self.parse_dir)
@@ -606,6 +619,7 @@ class UnitedStatesLobbyingRegistrationDisclosureScraper(
             # })
 
         # Collect Lobbyists
+        # TODO: deal with wierd non-name line continuation cases (blanks, "continued")
         _lobbyists_by_name = {}
 
         for l in parsed_form['lobbyists']:
