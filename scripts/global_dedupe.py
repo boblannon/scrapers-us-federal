@@ -1,16 +1,12 @@
 import os
-import sys
 import subprocess
 import time
 import shutil
 import json
 from copy import deepcopy
+import logging
 
 import requests
-
-PROJ_ROOT = os.path.join(__file__, os.pardir, os.pardir)
-
-sys.path.append(PROJ_ROOT)
 
 import pupa_settings
 
@@ -18,6 +14,9 @@ DEDUPE_BIN = os.path.join(pupa_settings.BIN_DIR,
                           'echelon-0.1.0-SNAPSHOT-standalone.jar')
 
 API_URL = pupa_settings.API_URL
+
+logging.basicConfig(filename='/projects/scrape.influenceexplorer.com/logs/dedupe.log',
+                    level=logging.INFO, format='%(asctime)s %(message)s')
 
 
 def get_whole_list(endpoint):
@@ -30,12 +29,16 @@ def get_whole_list(endpoint):
         max_page = jd['meta']['max_page']
         for result in jd['results']:
             yield result
+        logging.info('[{o}] retrieved page {n} of {m}'.format(n=params['page'],
+                                                              m=max_page,
+                                                              o=endpoint))
         params['page'] += 1
 
 
 def get_entity(entity_id):
     params = {'apikey': pupa_settings.API_KEY}
-    resp = requests.get('/'.join([API_URL, entity_id]), params=params)
+    target_url = "{a}/{e}/".format(a=API_URL, e=entity_id)
+    resp = requests.get(target_url, params=params)
     jd = resp.json()
     return jd
 
@@ -60,11 +63,19 @@ def add_related(list_entry):
 
 
 def export_data(file_loc, objects):
+    logging.info('exporting data to {fl}'.format(fl=file_loc))
+    total_num = len(objects)
     with open(file_loc, 'w') as out:
+        count = 0
         for obj in objects:
+            if not count % 100:
+                logging.info('exported {n} of {t} entities to {fl}'.format(
+                    fl=file_loc, n=count, t=total_num))
             js = json.dumps(add_related(obj))
             out.write(js)
             out.write('\n')
+            count += 1
+
 
 def main():
     IN_DIR = os.path.join(pupa_settings.DEDUPE_DIR, 'IN')
@@ -81,16 +92,19 @@ def main():
     org_file = os.path.join(IN_DIR, 'organizations')
     person_file = os.path.join(IN_DIR, 'people')
     output_file = os.path.join(OUT_DIR,
-                              'output_{ts}'.format(ts=timestr))
+                               'output_{ts}'.format(ts=timestr))
 
-    # organizations = [r for r in get_whole_list('organizations')]
+    if not os.path.exists(org_file):
+        organizations = [r for r in get_whole_list('organizations')]
 
-    # export_data(org_file, organizations)
+        export_data(org_file, organizations)
 
-    # people = [r for r in get_whole_list('people')]
+    if not os.path.exists(person_file):
+        people = [r for r in get_whole_list('people')]
 
-    # export_data(person_file, people)
+        export_data(person_file, people)
 
+    logging.info('deduping...')
     exit_status = subprocess.call(['java',
                                    '-jar', DEDUPE_BIN,
                                    '-i', org_file,
