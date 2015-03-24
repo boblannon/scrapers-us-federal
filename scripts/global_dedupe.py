@@ -83,13 +83,13 @@ def main():
     output_file = os.path.join(OUT_DIR,
                               'output_{ts}'.format(ts=timestr))
 
-    organizations = [r for r in get_whole_list('organizations')]
+    # organizations = [r for r in get_whole_list('organizations')]
 
-    export_data(org_file, organizations)
+    # export_data(org_file, organizations)
 
-    people = [r for r in get_whole_list('people')]
+    # people = [r for r in get_whole_list('people')]
 
-    export_data(person_file, people)
+    # export_data(person_file, people)
 
     exit_status = subprocess.call(['java',
                                    '-jar', DEDUPE_BIN,
