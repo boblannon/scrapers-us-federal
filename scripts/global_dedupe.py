@@ -18,6 +18,8 @@ API_URL = pupa_settings.API_URL
 logging.basicConfig(filename='/projects/scrape.influenceexplorer.com/logs/dedupe.log',
                     level=logging.INFO, format='%(asctime)s %(message)s')
 
+logging.getLogger("requests").setLevel(logging.WARNING)
+
 
 def get_whole_list(endpoint):
     params = {'apikey': pupa_settings.API_KEY, 'page': 1}
