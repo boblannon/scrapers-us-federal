@@ -8,12 +8,15 @@ import logging
 
 import requests
 
-import pupa_settings
+os.environ['DJANGO_SETTINGS_MODULE'] = 'pupa.settings'
 
-DEDUPE_BIN = os.path.join(pupa_settings.BIN_DIR,
+from django.conf import settings
+
+
+DEDUPE_BIN = os.path.join(settings.BIN_DIR,
                           'echelon-0.1.0-SNAPSHOT-standalone.jar')
 
-API_URL = pupa_settings.API_URL
+API_URL = settings.API_URL
 
 logging.basicConfig(filename='/projects/scrape.influenceexplorer.com/logs/dedupe.log',
                     level=logging.INFO, format='%(asctime)s %(message)s')
@@ -22,7 +25,7 @@ logging.getLogger("requests").setLevel(logging.WARNING)
 
 
 def get_whole_list(endpoint):
-    params = {'apikey': pupa_settings.API_KEY, 'page': 1}
+    params = {'apikey': settings.API_KEY, 'page': 1}
     max_page = 999999
     while params['page'] <= max_page:
         _url = '/'.join([API_URL, endpoint])
@@ -38,7 +41,7 @@ def get_whole_list(endpoint):
 
 
 def get_entity(entity_id):
-    params = {'apikey': pupa_settings.API_KEY}
+    params = {'apikey': settings.API_KEY}
     target_url = "{a}/{e}/".format(a=API_URL, e=entity_id)
     resp = requests.get(target_url, params=params)
     jd = resp.json()
@@ -80,11 +83,11 @@ def export_data(file_loc, objects):
 
 
 def main():
-    IN_DIR = os.path.join(pupa_settings.DEDUPE_DIR, 'IN')
-    OUT_DIR = os.path.join(pupa_settings.DEDUPE_DIR, 'OUT')
-    DONE_DIR = os.path.join(pupa_settings.DEDUPE_DIR, 'DONE')
-    ERR_DIR = os.path.join(pupa_settings.DEDUPE_DIR, 'ERROR')
-    for d in [pupa_settings.DEDUPE_DIR, IN_DIR, OUT_DIR, DONE_DIR,
+    IN_DIR = os.path.join(settings.DEDUPE_DIR, 'IN')
+    OUT_DIR = os.path.join(settings.DEDUPE_DIR, 'OUT')
+    DONE_DIR = os.path.join(settings.DEDUPE_DIR, 'DONE')
+    ERR_DIR = os.path.join(settings.DEDUPE_DIR, 'ERROR')
+    for d in [settings.DEDUPE_DIR, IN_DIR, OUT_DIR, DONE_DIR,
               ERR_DIR]:
         if not os.path.exists(d):
             os.mkdir(d)
