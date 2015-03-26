@@ -123,7 +123,7 @@ def main():
                                        'people_{ts}'.format(ts=timestr))
         shutil.move(org_file, org_done_loc)
         shutil.move(person_file, people_done_loc)
-        print('dedupe done')
+        logging.info('dedupe done')
     else:
         org_err_loc = os.path.join(ERR_DIR,
                                    'organizations_{ts}'.format(ts=timestr))
@@ -131,7 +131,7 @@ def main():
                                       'people_{ts}'.format(ts=timestr))
         shutil.move(org_file, org_err_loc)
         shutil.move(person_file, people_err_loc)
-        print('something went wrong')
+        logging.info('something went wrong')
 
 
 if __name__ == '__main__':
