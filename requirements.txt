@@ -1,6 +1,3 @@
--e git+https://github.com/influence-usa/pupa.git@disclosures#egg=pupa
--e git+https://github.com/influence-usa/python-opencivicdata-django.git@disclosures#egg=python_opencivicdata_django
--e git+https://github.com/sunlightlabs/validictory.git#egg=validictory
 pyyaml
 
 lxml
