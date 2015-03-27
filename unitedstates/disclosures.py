@@ -24,7 +24,7 @@ from .form_parsing import (UnitedStatesLobbyingRegistrationParser,
                            UnitedStatesSenatePostEmploymentParser,
                            UnitedStatesHousePostEmploymentParser)
 
-NY_TZ = pytz.timezone('America/New_York')
+UTC = pytz.timezone('UTC')
 
 
 class UnitedStatesLobbyingDisclosureScraper(BaseDisclosureScraper):
@@ -168,11 +168,11 @@ class UnitedStatesLobbyingRegistrationDisclosureScraper(
         _disclosure = Disclosure(
             effective_date=datetime.strptime(
                 parsed_form['datetimes']['effective_date'],
-                '%Y-%m-%d %H:%M:%S').replace(tzinfo=NY_TZ),
+                '%Y-%m-%d %H:%M:%S').replace(tzinfo=UTC),
             timezone='America/New_York',
             submitted_date=datetime.strptime(
                 parsed_form['datetimes']['signature_date'],
-                '%Y-%m-%d %H:%M:%S').replace(tzinfo=NY_TZ),
+                '%Y-%m-%d %H:%M:%S').replace(tzinfo=UTC),
             classification="lobbying"
         )
 
@@ -796,7 +796,7 @@ class UnitedStatesLobbyingRegistrationDisclosureScraper(
             location='United States',
             start_time=datetime.strptime(
                 parsed_form['datetimes']['effective_date'],
-                '%Y-%m-%d %H:%M:%S').replace(tzinfo=NY_TZ),
+                '%Y-%m-%d %H:%M:%S').replace(tzinfo=UTC),
             classification='registration'
         )
 
@@ -955,11 +955,11 @@ class UnitedStatesHousePostEmploymentScraper(BaseDisclosureScraper):
         _disclosure = Disclosure(
             effective_date=datetime.strptime(
                 parsed_form['termination_date'],
-                '%Y-%m-%d').replace(tzinfo=NY_TZ),
+                '%Y-%m-%d').replace(tzinfo=UTC),
             timezone='America/New_York',
             submitted_date=datetime.strptime(
                 parsed_form['termination_date'],
-                '%Y-%m-%d').replace(tzinfo=NY_TZ),
+                '%Y-%m-%d').replace(tzinfo=UTC),
             classification="post_employment",
         )
 
@@ -1000,10 +1000,10 @@ class UnitedStatesHousePostEmploymentScraper(BaseDisclosureScraper):
             location='United States',
             start_time=datetime.strptime(
                 parsed_form['termination_date'],
-                '%Y-%m-%d').replace(tzinfo=NY_TZ),
+                '%Y-%m-%d').replace(tzinfo=UTC),
             end_time=datetime.strptime(
                 parsed_form['lobbying_eligibility_date'],
-                '%Y-%m-%d').replace(tzinfo=NY_TZ),
+                '%Y-%m-%d').replace(tzinfo=UTC),
             classification='post_employment'
         )
 
@@ -1079,11 +1079,11 @@ class UnitedStatesSenatePostEmploymentScraper(BaseDisclosureScraper):
         _disclosure = Disclosure(
             effective_date=datetime.strptime(
                 parsed_form['restriction_period']['restriction_period_begin_date'],
-                '%Y-%m-%d').replace(tzinfo=NY_TZ),
+                '%Y-%m-%d').replace(tzinfo=UTC),
             timezone='America/New_York',
             submitted_date=datetime.strptime(
                 parsed_form['restriction_period']['restriction_period_begin_date'],
-                '%Y-%m-%d').replace(tzinfo=NY_TZ),
+                '%Y-%m-%d').replace(tzinfo=UTC),
             classification="post_employment",
         )
 
@@ -1130,10 +1130,10 @@ class UnitedStatesSenatePostEmploymentScraper(BaseDisclosureScraper):
             location='United States',
             start_time=datetime.strptime(
                 parsed_form['restriction_period']['restriction_period_begin_date'],
-                '%Y-%m-%d').replace(tzinfo=NY_TZ),
+                '%Y-%m-%d').replace(tzinfo=UTC),
             end_time=datetime.strptime(
                 parsed_form['restriction_period']['restriction_period_end_date'],
-                '%Y-%m-%d').replace(tzinfo=NY_TZ),
+                '%Y-%m-%d').replace(tzinfo=UTC),
             classification='post_employment'
         )
 
