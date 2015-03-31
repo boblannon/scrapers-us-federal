@@ -94,6 +94,8 @@ def main():
 
     timestr = time.strftime("%Y%m%d-%H%M%S")
 
+    logging.info('dedupe started')
+
     org_file = os.path.join(IN_DIR, 'organizations')
     person_file = os.path.join(IN_DIR, 'people')
     output_file = os.path.join(OUT_DIR,
