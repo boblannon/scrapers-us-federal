@@ -1014,6 +1014,13 @@ class UnitedStatesHousePostEmploymentScraper(BaseDisclosureScraper):
 
         _post_employment_event.extras['office_name'] = parsed_form["office_name"]
 
+        _disclosure.add_disclosed_event(
+            name=_post_employment_event.name,
+            type=_post_employment_event._type,
+            classification=_post_employment_event.classification,
+            id=_post_employment_event._id
+        )
+
         _post_employment_event.add_source(**_source)
         yield _post_employment_event
 
@@ -1143,6 +1150,13 @@ class UnitedStatesSenatePostEmploymentScraper(BaseDisclosureScraper):
                                                note="registrant")
 
         _post_employment_event.extras['office_name'] = parsed_form["office_name"]
+
+        _disclosure.add_disclosed_event(
+            name=_post_employment_event.name,
+            type=_post_employment_event._type,
+            classification=_post_employment_event.classification,
+            id=_post_employment_event._id
+        )
 
         _post_employment_event.add_source(**_source)
         yield _post_employment_event
