@@ -187,6 +187,9 @@ def main():
     ERR_DIR = os.path.join(settings.DEDUPE_DIR, 'ERROR')
     DELETE_DIR = os.path.join(settings.DEDUPE_DIR, 'DELETE')
 
+    for d in [IN_DIR, OUT_DIR, DONE_DIR, ERR_DIR, DELETE_DIR]:
+        assert os.path.exists(d)
+
     output_locs = glob(os.path.join(OUT_DIR, '*'))
 
     if len(output_locs) > 1:
