@@ -48,10 +48,6 @@ def consolidate_other_names(all_other_names, name_model):
                                         start_date=earliest_start,
                                         end_date=latest_end)
 
-        for o in objects:
-            if o.pk not in ('', None):
-                o.delete()
-
     return list(set(consolidated.values()))
 
 
@@ -132,7 +128,7 @@ def merge_objects(merge_map):
 
     new_other_names = consolidate_other_names(existing_other_names, name_model)
 
-    # for each alias object, create a new OtherName whose FK is primary_object 
+    # for each alias object, create a new OtherName whose FK is primary_object
     for new_other_name in new_other_names:
         if new_other_name.name != primary_object.name:
             logger.debug('{pn}, adding {an}'.format(pn=primary_object.name,
@@ -156,8 +152,7 @@ def merge_objects(merge_map):
 
     primary_object.save()
 
-    for alias_object in alias_objects:
-        alias_object.delete()
+    return alias_objects
 
 
 def read_echelon_output(output_loc):
@@ -167,12 +162,29 @@ def read_echelon_output(output_loc):
             yield merge_map
 
 
+@transaction.commit_on_success
+def clean_up_organizations(to_be_deleted):
+    for alias_id in to_be_deleted:
+        if alias_id.startswith('ocd-organization'):
+            org = Organization.objects.get(id=alias_id)
+            org.delete()
+
+
+@transaction.commit_on_success
+def clean_up_people(to_be_deleted):
+    for alias_id in to_be_deleted:
+        if alias_id.startswith('ocd-person'):
+            person = Person.objects.get(id=alias_id)
+            person.delete()
+
+
 def main():
     logger.info('beginning merge')
     IN_DIR = os.path.join(settings.DEDUPE_DIR, 'IN')
     OUT_DIR = os.path.join(settings.DEDUPE_DIR, 'OUT')
     DONE_DIR = os.path.join(settings.DEDUPE_DIR, 'DONE')
     ERR_DIR = os.path.join(settings.DEDUPE_DIR, 'ERROR')
+    DELETE_DIR = os.path.join(settings.DEDUPE_DIR, 'DELETE')
 
     output_locs = glob(os.path.join(OUT_DIR, '*'))
 
@@ -182,21 +194,46 @@ def main():
         raise Exception('More than one echelon output in OUT')
 
     output_loc = output_locs[0]
+    output_fname = os.path.basename(output_loc)
+    to_be_deleted_loc = os.path.join(DELETE_DIR, 'deleted_from_{}'.format(output_fname))
+
+    to_be_deleted = []
 
     try:
         for merge_map in read_echelon_output(output_loc):
-            merge_objects(merge_map)
+            alias_objects = merge_objects(merge_map)
+            for ao in alias_objects:
+                to_be_deleted.append(ao.id)
     except Exception as e:
-        output_fname = os.path.basename(output_loc)
         output_err_loc = os.path.join(ERR_DIR, output_fname)
         shutil.move(output_loc, output_err_loc)
-        logger.info('something went wrong')
+        logger.info('something went wrong with merge')
         raise e
     else:
-        output_fname = os.path.basename(output_loc)
         output_done_loc = os.path.join(DONE_DIR, output_fname)
         shutil.move(output_loc, output_done_loc)
+        with open(to_be_deleted_loc, 'w') as out:
+            for alias_id in to_be_deleted:
+                out.write(alias_id + '\n')
         logger.info('finished merge')
+
+    try:
+        logger.info('cleaning up organizations')
+        clean_up_organizations(to_be_deleted)
+        logger.info('cleaning up people')
+        clean_up_people(to_be_deleted)
+    except Exception as e:
+        to_be_deleted_fname = os.path.basename(to_be_deleted_loc)
+        to_be_deleted_err_loc = os.path.join(ERR_DIR, to_be_deleted_fname)
+        shutil.move(to_be_deleted_loc, to_be_deleted_err_loc)
+        logger.info('something went wrong when cleaning up')
+        raise e
+    else:
+        to_be_deleted_fname = os.path.basename(to_be_deleted_loc)
+        to_be_deleted_err_loc = os.path.join(ERR_DIR, to_be_deleted_fname)
+        shutil.move(to_be_deleted_loc, to_be_deleted_err_loc)
+        logger.info('finished cleaning up')
+
 
 if __name__ == '__main__':
     main()
