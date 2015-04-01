@@ -25,6 +25,7 @@ DEDUPE_BIN = os.path.join(settings.BIN_DIR,
 API_URL = settings.API_URL
 
 logger = logging.getLogger("")
+logger.setLevel("INFO")
 
 
 def consolidate_other_names(all_other_names, name_model):
