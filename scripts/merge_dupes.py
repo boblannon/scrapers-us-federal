@@ -49,6 +49,10 @@ def consolidate_other_names(all_other_names, name_model):
                                         start_date=earliest_start,
                                         end_date=latest_end)
 
+        for obj in objects:
+            if obj.pk is not None and obj.pk != '':
+                obj.delete()
+
     return list(set(consolidated.values()))
 
 
@@ -60,7 +64,7 @@ def collect_alias_other_names(alias_objects):
     return all_other_names
 
 
-def collect_alias_names(alias_objects, name_model):
+def collect_primary_names(alias_objects, name_model):
     # collect names
     all_names = defaultdict(list)
     for alias_object in alias_objects:
@@ -122,7 +126,7 @@ def merge_objects(merge_map):
     # round up existing other names
     existing_other_names = collect_alias_other_names(alias_objects)
 
-    names_to_other_names = collect_alias_names(alias_objects, name_model)
+    names_to_other_names = collect_primary_names(alias_objects, name_model)
 
     for name, name_objects in names_to_other_names.items():
         existing_other_names[name].extend(name_objects)
