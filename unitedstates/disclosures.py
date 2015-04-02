@@ -237,7 +237,9 @@ class UnitedStatesLobbyingRegistrationDisclosureScraper(
 
             _registrant.add_membership(
                 organization=_registrant_self_employment,
-                role='self_employed'
+                role='self_employed',
+                label='self-employment of {n}'.format(n=n),
+                start_date=_disclosure.effective_date.strftime('%Y-%m-%d')
             )
         else:
             _registrant = Organization(
@@ -393,12 +395,18 @@ class UnitedStatesLobbyingRegistrationDisclosureScraper(
             _main_contact.add_contact_detail(**cd)
 
         if _registrant._type == 'organization':
-            _registrant.add_member(name_or_person=_main_contact,
-                                   role='main_contact')
+            _registrant.add_member(
+                name_or_person=_main_contact,
+                role='main_contact',
+                label='main contact for {n}'.format(n=_registrant.name),
+                start_date=_disclosure.effective_date.strftime('%Y-%m-%d')
+            )
         else:
             _registrant_self_employment.add_member(
                 name_or_person=_main_contact,
-                role='main_contact'
+                role='main_contact',
+                label='main contact for {n}'.format(_registrant.name),
+                start_date=_disclosure.effective_date.strftime('%Y-%m-%d')
             )
 
         # # Client
@@ -657,10 +665,20 @@ class UnitedStatesLobbyingRegistrationDisclosureScraper(
 
         if _registrant._type == 'organization':
             for l in _lobbyists:
-                _registrant.add_member(l, role='lobbyist')
+                _registrant.add_member(
+                    l,
+                    role='lobbyist',
+                    label='lobbyist for {n}'.format(n=_registrant.name),
+                    start_date=_disclosure.effective_date.strftime('%Y-%m-%d')
+                )
         else:
             for l in _lobbyists:
-                _registrant_self_employment.add_member(l, role='lobbyist')
+                _registrant_self_employment.add_member(
+                    l,
+                    role='lobbyist',
+                    label='lobbyist for {n}'.format(n=_registrant.name),
+                    start_date=_disclosure.effective_date.strftime('%Y-%m-%d')
+                )
 
         # # Document
         # build document
@@ -984,6 +1002,7 @@ class UnitedStatesHousePostEmploymentScraper(BaseDisclosureScraper):
         _office.add_member(
             _registrant,
             role='employee',
+            label='employee for {n}'.format(n=_office.name),
             end_date=parsed_form['termination_date'],
         )
 
@@ -1121,6 +1140,7 @@ class UnitedStatesSenatePostEmploymentScraper(BaseDisclosureScraper):
         _office.add_member(
             _registrant,
             role='employee',
+            label='employee for {n}'.format(n=_office.name),
             end_date=parsed_form['restriction_period']['restriction_period_begin_date'],
         )
 
