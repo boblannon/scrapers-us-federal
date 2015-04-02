@@ -234,7 +234,7 @@ def main():
         raise e
     else:
         to_be_deleted_fname = os.path.basename(to_be_deleted_loc)
-        to_be_deleted_err_loc = os.path.join(ERR_DIR, to_be_deleted_fname)
+        to_be_deleted_err_loc = os.path.join(OUT_DIR, to_be_deleted_fname)
         shutil.move(to_be_deleted_loc, to_be_deleted_err_loc)
         logger.info('finished cleaning up')
 
