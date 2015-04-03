@@ -405,7 +405,7 @@ class UnitedStatesLobbyingRegistrationDisclosureScraper(
             _registrant_self_employment.add_member(
                 name_or_person=_main_contact,
                 role='main_contact',
-                label='main contact for {n}'.format(_registrant.name),
+                label='main contact for {n}'.format(n=_registrant.name),
                 start_date=_disclosure.effective_date.strftime('%Y-%m-%d')
             )
 

@@ -3,7 +3,7 @@ import shutil
 import json
 import logging
 from copy import deepcopy
-from collections import defaultdict
+from collections import defaultdict, namedtuple
 from glob import glob
 
 os.environ['DJANGO_SETTINGS_MODULE'] = 'pupa.settings'
@@ -15,7 +15,9 @@ setup()
 from django.db import transaction
 from django.conf import settings
 
-from opencivicdata.models import Organization, OrganizationName, Person, PersonName
+from opencivicdata.models import (Organization, OrganizationName,
+                                  Person, PersonName,
+                                  Membership)
 from pupa.utils.model_ops import merge_model_objects
 from pupa.utils import combine_dicts
 
@@ -100,6 +102,61 @@ def collect_primary_names(alias_objects, name_model):
     return dict(all_names)
 
 
+def collect_memberships(alias_objects, primary_object, name_attr):
+    unique_on = [f for f in ['organization', 'person', 'on_behalf_of', 'post', 'label']
+                 if f != name_attr]
+
+    MembershipKey = namedtuple('Key', ' '.join(unique_on))
+
+    all_memberships = defaultdict(list)
+
+    for membership in primary_object.memberships.all():
+        key = MembershipKey(**{u: getattr(membership, u) for u in unique_on})
+        all_memberships[key].append(membership)
+
+    for alias_object in alias_objects:
+        for membership in alias_object.memberships.all():
+            key = MembershipKey(**{u: getattr(membership, u) for u in unique_on})
+            all_memberships[key].append(membership)
+
+    return all_memberships
+
+
+def consolidate_memberships(all_memberships, primary_object, name_attr):
+    new_memberships = []
+
+    for membership_key, membership_objects in all_memberships.items():
+
+        start_dates = [mo.start_date for mo in membership_objects
+                       if mo.start_date != '']
+        if len(start_dates) > 0:
+            earliest_start_date = sorted(start_dates)[0]
+        else:
+            earliest_start_date = ''
+
+        end_dates = [mo.end_date for mo in membership_objects
+                     if mo.end_date != '']
+        if len(end_dates) > 0:
+            latest_end_date = sorted(end_dates)[-1]
+        else:
+            latest_end_date = ''
+
+        new_membership_kwargs = membership_key.__dict__
+        new_membership_kwargs[name_attr] = primary_object
+        new_membership_kwargs['start_date'] = earliest_start_date
+        new_membership_kwargs['end_date'] = latest_end_date
+        new_membership_kwargs['role'] = membership_objects[0].role
+        new_membership_kwargs['extras'] = {}
+
+        new_memberships.append(Membership(**new_membership_kwargs))
+
+        for membership_object in membership_objects:
+            if membership_object.pk != '' and membership_object.pk is not None:
+                membership_object.delete()
+
+    return new_memberships
+
+
 @transaction.commit_on_success
 def merge_objects(merge_map):
     primary_id = merge_map['main-id']
@@ -123,6 +180,9 @@ def merge_objects(merge_map):
     alias_objects = object_model.objects.filter(id__in=alias_ids)
     assert len(alias_ids) == len(alias_objects)
 
+    ##################
+    # combining names
+
     # round up existing other names
     existing_other_names = collect_alias_other_names(alias_objects)
 
@@ -144,11 +204,26 @@ def merge_objects(merge_map):
             new_other_name.save()
             logger.debug('saved object: {}'.format(new_other_name.__dict__))
 
+    ################
+    # combining extras
+
     # for each alias object, combine_dict the extras to primary object
     orig_extras = deepcopy(primary_object.extras)
     for alias_object in alias_objects:
         new_extras = combine_dicts(json.loads(orig_extras),
                                    json.loads(alias_object.extras))
+
+    ################
+    # combining memberships
+
+    # collect all memberships on alias objects and primary object
+    all_memberships = collect_memberships(alias_objects, primary_object, name_attr)
+
+    # consolidate memberships based on person_id/organization_id, post_id, on_behalf_of_id 
+    new_memberships = consolidate_memberships(all_memberships, primary_object, name_attr)
+
+    for new_membership in new_memberships:
+        new_membership.save()
 
     # apply merge_model_objects
     primary_object = merge_model_objects(primary_object, alias_objects, keep_old=True)
@@ -238,7 +313,7 @@ def main():
         raise e
     else:
         to_be_deleted_fname = os.path.basename(to_be_deleted_loc)
-        to_be_deleted_err_loc = os.path.join(OUT_DIR, to_be_deleted_fname)
+        to_be_deleted_err_loc = os.path.join(DONE_DIR, to_be_deleted_fname)
         shutil.move(to_be_deleted_loc, to_be_deleted_err_loc)
         logger.info('finished cleaning up')
 
