@@ -14,3 +14,41 @@ interoperate the data with other services that consume the format.
 This also serves to ensure that we can losslessly convert the data into the
 Open Civic Data format, and ensure that the Open Civic Data format maintains
 support for Federal level data.
+
+Progress
+========
+
+Disclosures
+-----------
+
+### Lobbying Registrations
+
+ - [x] Data model
+ - [x] Crawler
+ - [x] Scraper
+ - [ ] Analysis
+ - [ ] Documentation
+
+### Lobbying Reports
+ 
+ - [ ] Data model
+ - [ ] Crawler
+ - [ ] Scraper
+ - [ ] Analysis
+ - [ ] Documentation
+
+### Campaign Finance Registrations
+ 
+ - [ ] Data model
+ - [ ] Crawler
+ - [ ] Scraper
+ - [ ] Analysis
+ - [ ] Documentation
+
+### Campaign Finance Reports
+ 
+ - [ ] Data model
+ - [ ] Crawler
+ - [ ] Scraper
+ - [ ] Analysis
+ - [ ] Documentation
