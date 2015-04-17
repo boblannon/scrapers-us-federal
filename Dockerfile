@@ -1,4 +1,4 @@
-FROM        paultag/pupa:latest
+FROM        influence-usa/pupa:disclosures-latest
 MAINTAINER  Paul R. Tagliamonte <paultag@sunlightfoundation.com>
 
 RUN mkdir -p /opt/sunlightfoundation.com/
