@@ -126,6 +126,8 @@ def main():
         shutil.move(org_file, org_done_loc)
         shutil.move(person_file, people_done_loc)
         logging.info('dedupe done')
+        if __name__ != '__main__':
+            return output_file
     else:
         org_err_loc = os.path.join(ERR_DIR,
                                    'organizations_{ts}'.format(ts=timestr))
@@ -133,10 +135,13 @@ def main():
                                       'people_{ts}'.format(ts=timestr))
         shutil.move(org_file, org_err_loc)
         shutil.move(person_file, people_err_loc)
+        if os.path.exists(output_file):
+            output_err_loc = os.path.join(ERR_DIR,
+                                          'output_{ts}'.format(ts=timestr))
+            shutil.move(output_file, output_err_loc)
         logging.info('something went wrong')
-
-    if __name__ != '__main__':
-        return output_file
+        if __name__ != '__main__':
+            raise Exception("dedupe process ended badly")
 
 
 if __name__ == '__main__':

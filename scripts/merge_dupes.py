@@ -62,7 +62,7 @@ def collect_alias_other_names(alias_objects):
     all_other_names = defaultdict(list)
     for alias_object in alias_objects:
         for other_name in alias_object.other_names.all():
-            all_other_names[other_name].append(other_name)
+            all_other_names[other_name.name].append(other_name)
     return all_other_names
 
 
