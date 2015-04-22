@@ -18,11 +18,9 @@ DEDUPE_BIN = os.path.join(settings.BIN_DIR,
 
 API_URL = settings.API_URL
 
-logging.basicConfig(filename='/projects/scrape.influenceexplorer.com/logs/dedupe.log',
-                    level=logging.INFO, format='%(asctime)s %(message)s')
-
 logging.getLogger("requests").setLevel(logging.WARNING)
 
+logger = logging.getLogger("")
 
 def get_whole_list(endpoint):
     params = {'apikey': settings.API_KEY, 'page': 1}
@@ -34,7 +32,7 @@ def get_whole_list(endpoint):
         max_page = jd['meta']['max_page']
         for result in jd['results']:
             yield result
-        logging.info('[{o}] retrieved page {n} of {m}'.format(n=params['page'],
+        logger.info('[{o}] retrieved page {n} of {m}'.format(n=params['page'],
                                                               m=max_page,
                                                               o=endpoint))
         params['page'] += 1
@@ -68,13 +66,13 @@ def add_related(list_entry):
 
 
 def export_data(file_loc, objects):
-    logging.info('exporting data to {fl}'.format(fl=file_loc))
+    logger.info('exporting data to {fl}'.format(fl=file_loc))
     total_num = len(objects)
     with open(file_loc, 'w') as out:
         count = 0
         for obj in objects:
             if not count % 100:
-                logging.info('exported {n} of {t} entities to {fl}'.format(
+                logger.info('exported {n} of {t} entities to {fl}'.format(
                     fl=file_loc, n=count, t=total_num))
             js = json.dumps(add_related(obj))
             out.write(js)
@@ -94,7 +92,7 @@ def main():
 
     timestr = time.strftime("%Y%m%d-%H%M%S")
 
-    logging.info('dedupe started')
+    logger.info('dedupe started')
 
     org_file = os.path.join(IN_DIR, 'organizations')
     person_file = os.path.join(IN_DIR, 'people')
@@ -111,7 +109,7 @@ def main():
 
         export_data(person_file, people)
 
-    logging.info('deduping...')
+    logger.info('deduping...')
     exit_status = subprocess.call(['java',
                                    '-jar', DEDUPE_BIN,
                                    '-i', org_file,
@@ -125,7 +123,7 @@ def main():
                                        'people_{ts}'.format(ts=timestr))
         shutil.move(org_file, org_done_loc)
         shutil.move(person_file, people_done_loc)
-        logging.info('dedupe done')
+        logger.info('dedupe done')
         if __name__ != '__main__':
             return output_file
     else:
@@ -139,7 +137,7 @@ def main():
             output_err_loc = os.path.join(ERR_DIR,
                                           'output_{ts}'.format(ts=timestr))
             shutil.move(output_file, output_err_loc)
-        logging.info('something went wrong')
+        logger.info('something went wrong')
         if __name__ != '__main__':
             raise Exception("dedupe process ended badly")
 
