@@ -135,6 +135,9 @@ def main():
         shutil.move(person_file, people_err_loc)
         logging.info('something went wrong')
 
+    if __name__ != '__main__':
+        return output_file
+
 
 if __name__ == '__main__':
     main()

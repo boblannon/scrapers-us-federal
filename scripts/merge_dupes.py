@@ -317,6 +317,9 @@ def main():
         shutil.move(to_be_deleted_loc, to_be_deleted_err_loc)
         logger.info('finished cleaning up')
 
+    if __name__ != '__main__':
+        return len(to_be_deleted)
+
 
 if __name__ == '__main__':
     main()
