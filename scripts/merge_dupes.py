@@ -26,8 +26,10 @@ DEDUPE_BIN = os.path.join(settings.BIN_DIR,
 
 API_URL = settings.API_URL
 
-logger = logging.getLogger("")
-logger.setLevel("INFO")
+logging.basicConfig(filename='/projects/scrape.influenceexplorer.com/logs/merge.log',
+                    level=logging.INFO, format='%(asctime)s %(message)s')
+
+logging.getLogger("merge_dupes")
 
 
 def consolidate_other_names(all_other_names, name_model):
