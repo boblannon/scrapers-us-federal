@@ -11,12 +11,12 @@ PUPA=$HOME/virt/bin/pupa
 
 logger -t "update_dedupe_merge.sh" "======= starting update_dedupe_merge.sh  $(date --rfc-3339=seconds) ======="
 
-if pgrep update_dedupe_merge.sh;
+if [ "$(pgrep -f "/bin/bash $HOME/src/scrapers-us-federal/cronjobs/update_dedupe_merge.sh")" != "$$" ];
 then
     logger -t "update_dedupe_merge" "update_dedupe_merge already running"
     exit 1
 else
-    if pgrep "python $HOME/src/scrapers-us-federal/scripts/dedupe_and_merge.py";
+    if pgrep -f "$PYTHON $HOME/src/scrapers-us-federal/scripts/dedupe_and_merge.py";
     then
         logger -t "update_dedupe_merge" "dedupe_and_merge somehow already running. something's wrong."
         exit 1
@@ -24,7 +24,7 @@ else
         logger -t "update_dedupe_merge" "pupa update"
         $PUPA update unitedstates lobbying_registrations
         wait
-        if [ $? -eq 0 ]
+        if [ $? -eq 0 ];
         then
             logger -t "update_dedupe_merge" "deduping and merging"
             $PYTHON $HOME/src/scrapers-us-federal/scripts/dedupe_and_merge.py
