@@ -1,5 +1,7 @@
 #! /bin/bash
 
+set -e
+
 ### update_dedupe_merge.sh
 # This script is responsible for running update commands, followed by the loop
 # of deduplication and merging until there are no new merge operations to
@@ -22,17 +24,14 @@ else
         exit 1
     else
         logger -t "update_dedupe_merge" "pupa update"
-        $PUPA update unitedstates lobbying_registrations
-        wait
+        $PUPA update unitedstates lobbying_registrations &> $HOME/logs/update.log
+        logger -t "update_dedupe_merge" "deduping and merging"
+        $PYTHON $HOME/src/scrapers-us-federal/scripts/dedupe_and_merge.py &> $HOME/logs/dedupe_and_merge.log
         if [ $? -eq 0 ];
         then
-            logger -t "update_dedupe_merge" "deduping and merging"
-            $PYTHON $HOME/src/scrapers-us-federal/scripts/dedupe_and_merge.py
-            wait
-            exit $?
+            logger -t "update_dedupe_merge" "======= finished update_dedupe_merge.sh  $(date --rfc-3339=seconds) ======="
         else
-            logger -t "update_dedupe_merge" "update error. see logs."
-            exit 1
+            logger -t "update_dedupe_merge" "======= failed update_dedupe_merge.sh  $(date --rfc-3339=seconds) ======="
         fi
     fi
 fi
