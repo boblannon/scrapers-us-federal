@@ -1,4 +1,5 @@
 import json
+import os
 from scripts import global_dedupe, merge_dupes
 
 
@@ -10,6 +11,7 @@ def main():
         
         # If echelon doesn't recommend any merges, stop
         if len(merges) == 0:
+            os.remove(dedupe_record_loc)
             break
 
         num_deleted = merge_dupes.main()
