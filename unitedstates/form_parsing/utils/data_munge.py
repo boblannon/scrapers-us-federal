@@ -15,7 +15,8 @@ DATE_FORMATS = ['%m/%d/%Y',
                 '%m/%d/%y',
                 '%Y/%m/%d',
                 '%m-%d-%Y',
-                '%m-%d-%y']
+                '%m-%d-%y',
+                '%m.%d.%Y']
 
 LEAP_DAY_CHECKS = [
     re.compile(r'^(?P<year>(19|20)[0-9]{2})'
