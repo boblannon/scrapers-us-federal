@@ -1,9 +1,16 @@
 from pupa.scrape import Jurisdiction, Organization
+<<<<<<< HEAD
 from .legislative import UnitedStatesLegislativeScraper
 from .disclosures import (UnitedStatesLobbyingRegistrationDisclosureScraper,
                           UnitedStatesHousePostEmploymentScraper,
                           UnitedStatesSenatePostEmploymentScraper)
+=======
+>>>>>>> master
 
+# scrapers
+from .legislative import UnitedStatesLegislativeScraper
+from .bill import UnitedStatesBillScraper
+from .committee import UnitedStatesCommitteeScraper
 
 class UnitedStates(Jurisdiction):
     classification = 'government'
@@ -27,6 +34,8 @@ class UnitedStates(Jurisdiction):
         "senate_post_employment":
             UnitedStatesSenatePostEmploymentScraper
         # Executive Scraper here
+        "bills": UnitedStatesBillScraper,
+        "committees": UnitedStatesCommitteeScraper
     }
 
     def get_organizations(self):
@@ -101,3 +110,4 @@ class UnitedStates(Jurisdiction):
         self._house_clerk = house_clerk
 
         yield house_clerk
+        yield legislature
