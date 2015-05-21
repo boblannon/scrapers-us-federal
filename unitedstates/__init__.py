@@ -1,11 +1,8 @@
 from pupa.scrape import Jurisdiction, Organization
-<<<<<<< HEAD
 from .legislative import UnitedStatesLegislativeScraper
 from .disclosures import (UnitedStatesLobbyingRegistrationDisclosureScraper,
                           UnitedStatesHousePostEmploymentScraper,
                           UnitedStatesSenatePostEmploymentScraper)
-=======
->>>>>>> master
 
 # scrapers
 from .legislative import UnitedStatesLegislativeScraper
