@@ -25,8 +25,6 @@ else
     else
         logger -t "update_dedupe_merge" "pupa update"
         $PUPA update unitedstates lobbying_registrations &>> $HOME/logs/update.log
-        $PUPA update unitedstates house_post_employment &>> $HOME/logs/update.log
-        $PUPA update unitedstates senate_post_employment &>> $HOME/logs/update.log
         logger -t "update_dedupe_merge" "deduping and merging"
         $PYTHON $HOME/src/scrapers-us-federal/scripts/dedupe_and_merge.py &> $HOME/logs/dedupe_and_merge.log
         if [ $? -eq 0 ];
