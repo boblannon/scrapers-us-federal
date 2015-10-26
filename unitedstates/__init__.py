@@ -5,9 +5,9 @@ from .disclosures import (UnitedStatesLobbyingRegistrationDisclosureScraper,
                           UnitedStatesSenatePostEmploymentScraper)
 
 # scrapers
-from .legislative import UnitedStatesLegislativeScraper
 from .bill import UnitedStatesBillScraper
 from .committee import UnitedStatesCommitteeScraper
+
 
 class UnitedStates(Jurisdiction):
     classification = 'government'
@@ -29,7 +29,7 @@ class UnitedStates(Jurisdiction):
         "house_post_employment":
             UnitedStatesHousePostEmploymentScraper,
         "senate_post_employment":
-            UnitedStatesSenatePostEmploymentScraper
+            UnitedStatesSenatePostEmploymentScraper,
         # Executive Scraper here
         "bills": UnitedStatesBillScraper,
         "committees": UnitedStatesCommitteeScraper
