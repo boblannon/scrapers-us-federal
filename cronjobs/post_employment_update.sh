@@ -27,7 +27,8 @@ else
         if [ $? -eq 0 ];
         then
             $cache_busted=`curl http://lobbying.influenceexplorer.com/vashistha_cache_clear`
-            if [ $cache_busted == "OK" ];
+            $page_ok=`curl --write-out %{http_code} --silent --output /dev/null http://lobbying.influenceexplorer.com/vashistha_cache_clear`
+            if [ $cache_busted == "OK" && $page_ok == "200" ];
             then
                 logger -t "post_employment_update" "======= finished post_employment_update.sh  $(date --rfc-3339=seconds) ======="
             else
