@@ -26,14 +26,14 @@ else
         $PYTHON $HOME/src/scrapers-us-federal/scripts/dedupe_and_merge.py &> $HOME/logs/dedupe_and_merge.log
         if [ $? -eq 0 ];
         then
-            $cache_busted=`curl http://lobbying.influenceexplorer.com/vashistha_cache_clear`
-            $page_ok=`curl --write-out %{http_code} --silent --output /dev/null http://lobbying.influenceexplorer.com/vashistha_cache_clear`
-            if [ $cache_busted == "OK" && $page_ok == "200" ];
+          cache_busted=$(curl http://lobbying.influenceexplorer.com/vashistha_cache_clear)
+          page_ok=$(curl --write-out %{http_code} --silent --output /dev/null http://lobbying.influenceexplorer.com/vashistha_cache_clear)
+          if [ "$page_ok" == "200" ] &&  [ "$cache_busted" == "OK" ]
             then
                 logger -t "post_employment_update" "======= finished post_employment_update.sh  $(date --rfc-3339=seconds) ======="
             else
                 logger -t "post_employment_update" "======= WARNING: post_employment_update worked, but cache busting didn't  $(date --rfc-3339=seconds) ======="
-            fi
+          fi
         else
             logger -t "post_employment_update" "======= failed post_employment_update.sh  $(date --rfc-3339=seconds) ======="
         fi
